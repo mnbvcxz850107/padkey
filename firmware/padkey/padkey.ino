@@ -22,7 +22,7 @@
 #include "web_assets.h"
 #include "protocol.h"
 
-#define FW_VERSION "1.4.2"
+#define FW_VERSION "1.4.3"
 
 // ---- T-Dongle-S3 pins (from LilyGO examples) ----
 #define PIN_LCD_MOSI 3
@@ -746,8 +746,10 @@ static void setupBle() {
     if (was && clientCount == 0) { uint8_t m = M_RELEASE; enqueue(&m, 1); }
   });
   BLEService svc = bleServer.createService(BLE_SVC);
-  bleCmd = svc.createCharacteristic(BLE_CMD, BLEProperty::Write | BLEProperty::WriteNR, BLEPermission::ReadWriteOpen);
-  bleEvt = svc.createCharacteristic(BLE_EVT, BLEProperty::Read | BLEProperty::Notify, BLEPermission::ReadWriteOpen);
+  // Permissions must match properties exactly, or the library rejects the characteristic.
+  bleCmd = svc.createCharacteristic(BLE_CMD, BLEProperty::Write | BLEProperty::WriteNR, BLEPermission::WriteOpen);
+  bleEvt = svc.createCharacteristic(BLE_EVT, BLEProperty::Read | BLEProperty::Notify, BLEPermission::ReadOpen);
+  if (!bleCmd || !bleEvt) return;
   bleCmd.onWrite([](BLECharacteristic &chr, const BLEConnInfo &c) {
     size_t n = 0;
     const uint8_t *d = chr.getValue(&n);
