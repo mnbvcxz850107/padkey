@@ -158,12 +158,13 @@ body.phone .pill { font-size: 11px; padding: 3px 8px; }
 body.phone #pad .hint { font-size: 13px; padding: 0 16px; }
 
 /* ---------- MacBook-style iPad layout: Touch Bar / keyboard / trackpad ---------- */
-#touchbar { display: flex; gap: 6px; align-items: center; margin: 0 10px 8px; padding: 6px; height: 58px; flex: none; order: 1;
+#touchbar { display: flex; gap: 6px; align-items: center; margin: 0; padding: 6px 8px; height: 58px; flex: none; order: 2; border-radius: 0;
   background: #000; border-radius: 14px; border: 1px solid #1f1f24; box-shadow: 0 0 18px rgba(255,43,214,.12), 0 0 18px rgba(0,240,255,.08); }
 header { order: 0; }
-body:not(.phone) #kbd { order: 2; display: block; background: none; border: none; padding: 0 10px 8px; }
+body:not(.phone) #kbd { order: 3; display: block; }
+body:not(.phone).nokbd #touchbar { order: 3; }
 body:not(.phone).nokbd #kbd { display: none; }
-body:not(.phone) main { order: 3; justify-content: center; flex-direction: row !important; }
+body:not(.phone) main { order: 1; justify-content: center; flex-direction: row !important; padding-bottom: 8px; }
 body:not(.phone) .padwrap { flex: none; width: min(800px, 74%); }
 body:not(.phone) .clicks { display: none; }
 body:not(.phone) #fx { display: none; }
@@ -184,6 +185,34 @@ body.phone #touchbar { display: none; }
 .tb-scroll .k { min-width: 0 !important; flex: 1 !important; }
 .hot { animation: hot .45s ease-out; }
 
+/* ---------- iPad native keyboard look (dark) ---------- */
+#kbd.native { background: #1f1f21; border: none; padding: 8px 6px 10px; }
+.nrow { display: flex; gap: 8px; margin-bottom: 9px; }
+.nrow:last-child { margin-bottom: 0; }
+.nk { flex: 1; min-width: 0; height: 56px; border-radius: 9px; background: #69696d; color: #fff; position: relative; touch-action: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 1px 0 rgba(0,0,0,.55); padding: 0;
+  font: 400 26px -apple-system, "PingFang TC", sans-serif; }
+.nk .fl { font-size: 13px; color: #c7c7cc; line-height: 1; margin-bottom: 2px; }
+.nk .pl { line-height: 1.05; }
+.nk.sp { background: #47474a; font-size: 22px; }
+.nk.sp-num, .nk.sp-letters, .nk.sp-abc, .nk.sp-sym, .nk.sp-num123 { font-size: 19px; }
+.nk.sp-space { background: #69696d; font-size: 17px; color: #d8d8dc; }
+.nk.sp-shift.on { background: #f2f2f7; color: #000; }
+.nk.down { background: #9b9ba1; }
+.nk.sp.down { background: #69696d; }
+.nk.flick .pl { opacity: .25; }
+.nk.flick .fl { font-size: 26px; color: #fff; }
+#touchbar .k.arrow { min-width: 46px; }
+body.phone .nk { height: 44px; font-size: 20px; border-radius: 7px; }
+body.phone .nrow { gap: 5px; margin-bottom: 7px; }
+body.phone .nk .fl { font-size: 10px; }
+body.phone .nk.sp { font-size: 17px; }
+body.phone.land[data-tab=kbd] header { display: none; }
+body.phone.land .nk { height: 36px; font-size: 18px; }
+body.phone.land .nrow { margin-bottom: 5px; }
+body.phone.land .nk .fl { display: none; }
+body.phone.land #tabs button { height: 40px; flex-direction: row; gap: 6px; }
+
 @media (orientation: portrait) {
   main { flex-direction: column; }
   #fx { width: auto; height: 34%; flex: none; }
@@ -202,7 +231,7 @@ body.phone #touchbar { display: none; }
   <button class="hbtn" id="bKbd">⌨️ 鍵盤</button>
   <button class="hbtn" id="bSet">⚙️</button>
 </header>
-<div id="touchbar"><div class="tb-scroll" id="tbScroll"></div><button id="tbZy">注</button><button id="tbFn">fn</button></div>
+<div id="touchbar"><div class="tb-scroll" id="tbScroll"></div><button id="tbZy" style="display:none">注</button><button id="tbFn">fn</button></div>
 
 <main>
   <div class="padwrap">
@@ -745,7 +774,10 @@ function renderTouchBar() {
   if (!escKey) {
     escKey = makeKey(['esc', 0, 0x29, '']);
     fnKeys = [...Array(12)].map((_, i) => makeKey(['F' + (i + 1), 0, 0x3A + i, '']));
-    $('touchbar').insertBefore(escKey, tb);
+    const bar = $('touchbar');
+    [escKey, makeKey(['tab', 0, 0x2B, '']), makeKey(['ctrl', 0, 0xE0, 'mod m']), makeKey(['alt', 0, 0xE2, 'mod m']), makeKey(['⌘', 0, 0xE3, 'mod m'])]
+      .forEach((k) => bar.insertBefore(k, tb));
+    [['←', 0x50], ['↑', 0x52], ['↓', 0x51], ['→', 0x4F]].forEach(([l, u]) => bar.insertBefore(makeKey([l, 0, u, 'arrow']), $('tbFn')));
   }
   if (fnMode) { fnKeys.forEach((k) => tb.appendChild(k)); return; }
   if (zyMode) {
@@ -765,9 +797,9 @@ function setZy(on, quiet) {
   document.body.classList.toggle('zy', on);
   ['tbZy', 'stripZy'].forEach((id) => $(id) && $(id).classList.toggle('on', on));
   if (on && document.activeElement === sys) sys.blur();
+  if (typeof buildNativeKbd === 'function' && nkEls) buildNativeKbd();
   refreshKeys();
   if (typeof renderTouchBar === 'function' && escKey) renderTouchBar();
-  if (!quiet && on && !setZy.init) toast('注音模式：用 🌐 鍵或「注」按鈕切換，會同時切換三星平板的輸入法', 3500);
   setZy.init = false;
 }
 $('tbZy').addEventListener('mousedown', (e) => e.preventDefault());
@@ -826,6 +858,7 @@ function refreshKeys() {
     el.classList.toggle('latched', latched.has(u));
     el.classList.toggle('locked', latched.get(u) === 'locked');
   }
+  if (typeof refreshNative === 'function') refreshNative();
 }
 
 // Palm rejection ("rest your hands" mode): a key fires when a SHORT tap is
@@ -930,13 +963,183 @@ function clearLatched() {
   refreshKeys();
 }
 
-function buildKbd() {
-  const kb = $('kbd');
-  LAYOUT.forEach((row, ri) => {
-    const r = document.createElement('div'); r.className = 'row' + (ri === 0 ? ' fnrow' : '');
-    for (const def of row) r.appendChild(makeKey(def));
-    kb.appendChild(r);
+// ------------------------------------------------------------ iPad-style keyboard
+// Layouts copied from the iPad's own keyboard (dark mode). A key may have:
+//   l: label, u: HID usage sent as-is (zhuyin keys), c: character to type,
+//   f: flick-down character (the small grey label), fl: flick label,
+//   k: special key, w: relative width. Spacer: { sp: width }.
+const zk = (l, u, fl, f) => ({ l, u, fl, f });
+const ek = (l, fl, f) => ({ l, c: l, fl, f });
+const NATIVE = {
+  zh: [
+    [zk('ㄅ', 0x1E, '1', '1'), zk('ㄉ', 0x1F, '2', '2'), zk('ˇ', 0x20, '3', '3'), zk('ˋ', 0x21, '4', '4'), zk('ㄓ', 0x22, '5', '5'), zk('ˊ', 0x23, '6', '6'),
+      zk('˙', 0x24, '7', '7'), zk('ㄚ', 0x25, '8', '8'), zk('ㄞ', 0x26, '9', '9'), zk('ㄢ', 0x27, '0', '0'), zk('ㄦ', 0x2D, '-', '-'), { k: 'bs', w: 1.3 }],
+    [{ sp: 0.35 }, zk('ㄆ', 0x14, '/', '/'), zk('ㄊ', 0x1A, '@', '@'), zk('ㄍ', 0x08, '#', '#'), zk('ㄐ', 0x15, '$', '$'), zk('ㄔ', 0x17, '%', '%'), zk('ㄗ', 0x1C, '…', null),
+      zk('ㄧ', 0x18, '&', '&'), zk('ㄛ', 0x0C, '*', '*'), zk('ㄟ', 0x12, '(', '('), zk('ㄣ', 0x13, ')', ')'), zk('「', 0x2F, '『', '{'), zk('」', 0x30, '』', '}')],
+    [{ sp: 0.6 }, zk('ㄇ', 0x04, '~', '~'), zk('ㄋ', 0x16, '_', '_'), zk('ㄎ', 0x07, '—', null), zk('ㄑ', 0x09, '+', '+'), zk('ㄕ', 0x0A, '=', '='), zk('ㄘ', 0x0B, '.', '.'),
+      zk('ㄨ', 0x0D, ';', ';'), zk('ㄜ', 0x0E, ':', ':'), zk('ㄠ', 0x0F, "'", "'"), zk('ㄤ', 0x33, '"', '"'), { k: 'ret', w: 1.55 }],
+    [{ sp: 1.1 }, zk('ㄈ', 0x1D, '¥', null), zk('ㄌ', 0x1B, '€', null), zk('ㄏ', 0x06, '^', '^'), zk('ㄒ', 0x19, '[', '['), zk('ㄖ', 0x05, ']', ']'), zk('ㄙ', 0x11, '《', '<'),
+      zk('ㄩ', 0x10, '》', '>'), zk('ㄝ', 0x36, '、', '\\'), zk('ㄡ', 0x37, '?', '?'), zk('ㄥ', 0x38, '!', '!'), { l: '。', u: 0x37, mods: 2, fl: '，', f: '<' }],
+    [{ k: 'globe' }, { k: 'num' }, { k: 'space', w: 6.2 }, { k: 'num' }, { k: 'abc' }, { k: 'hide' }],
+  ],
+  en: [
+    ['q1', 'w2', 'e3', 'r4', 't5', 'y6', 'u7', 'i8', 'o9', 'p0'].map((s) => ek(s[0], s[1], s[1])).concat([{ k: 'bs', w: 1.3 }]),
+    [{ sp: 0.5 }, ...['a@', 's#', 'd$', 'f&', 'g*', 'h(', 'j)', "k'", 'l"'].map((s) => ek(s[0], s[1], s[1])), { k: 'ret', w: 1.75 }],
+    [{ k: 'shift', w: 1.3 }, ...['z%', 'x-', 'c+', 'v=', 'b/', 'n;', 'm:', ',!', '.?'].map((s) => ek(s[0], s[1], s[1])), { k: 'shift', w: 1.3 }],
+    [{ k: 'globe' }, { k: 'num' }, { k: 'space', w: 6.6 }, { k: 'num' }, { k: 'hide' }],
+  ],
+  num: [
+    [...'1234567890'.split('').map((c) => ek(c)), { k: 'bs', w: 1.3 }],
+    [{ sp: 0.5 }, ...'@#$&*()\'"'.split('').map((c) => ek(c)), { k: 'ret', w: 1.75 }],
+    [{ k: 'sym', w: 1.3 }, ...'%-+=/;:,.'.split('').map((c) => ek(c)), { k: 'sym', w: 1.3 }],
+    [{ k: 'globe' }, { k: 'letters' }, { k: 'space', w: 6.6 }, { k: 'letters' }, { k: 'hide' }],
+  ],
+  sym: [
+    [...'[]{}#%^*+='.split('').map((c) => ek(c)), { k: 'bs', w: 1.3 }],
+    [{ sp: 0.5 }, ...'_\\|~<>`$&'.split('').map((c) => ek(c)), { k: 'ret', w: 1.75 }],
+    [{ k: 'num123', w: 1.3 }, ...'.,?!\'"@#%'.split('').map((c) => ek(c)), { k: 'num123', w: 1.3 }],
+    [{ k: 'globe' }, { k: 'letters' }, { k: 'space', w: 6.6 }, { k: 'letters' }, { k: 'hide' }],
+  ],
+};
+const SPECIAL = { bs: '⌫', ret: '⏎', shift: '⇧', globe: '🌐', num: '.?123', sym: '#+=', num123: '123', abc: 'abc', hide: '⌨︎', space: '' };
+let kbdPage = null;                  // 'num' | 'sym' | null (letters)
+let shiftTapAt = 0;
+const nkEls = [];
+
+function layoutName() { return kbdPage || (zyMode ? 'zh' : 'en'); }
+
+// Type one ASCII character on the host. In Zhuyin mode, plain keys would be read
+// as Zhuyin, so the input method is flipped to English around them.
+function typeChar(c) {
+  const cu = charUsage(c); if (!cu) return;
+  const [u, sh] = cu;
+  let mods = 0; for (const m of latched.keys()) mods |= modBit(m);
+  if (sh) mods |= K.SHIFT;
+  const wrap = zyMode && !sh && !mods && IME_KEYS[cfg.ime];
+  if (wrap) sendImeToggle();
+  send(new Uint8Array([M.TAP, mods, u]));
+  if (wrap) sendImeToggle();
+}
+function sendImeToggle() {
+  const k = IME_KEYS[cfg.ime]; if (!k) return;
+  if (k[1] === 0xE1) { send(new Uint8Array([M.KEYDOWN, 0xE2])); send(new Uint8Array([M.KEYDOWN, 0xE1])); send(new Uint8Array([M.KEYUP, 0xE1])); send(new Uint8Array([M.KEYUP, 0xE2])); }
+  else send(new Uint8Array([M.TAP, k[0], k[1]]));
+}
+
+function pressNative(key, flick) {
+  const mods = [...latched.keys()];
+  let modBits = 0; for (const m of mods) modBits |= modBit(m);
+  if (flick && key.f) { typeChar(key.f); label(key.f, C565.pink); }
+  else if (key.u) {                                   // Zhuyin key: raw usage
+    send(new Uint8Array([M.TAP, modBits | (key.mods || 0), key.u]));
+    keyLabel(String.fromCharCode(97 + Math.max(0, key.u - 4)).replace(/[^a-z]/, '#'), mods);
+  } else if (key.c) {
+    let c = key.c;
+    if (/[a-z]/.test(c)) {                            // letter: honour shift + host caps
+      const upper = latched.has(0xE1);
+      const shiftMod = upper !== hostCaps;
+      const other = modBits & ~K.SHIFT;
+      send(new Uint8Array([M.TAP, other | (shiftMod ? K.SHIFT : 0), 0x04 + c.charCodeAt(0) - 97]));
+      keyLabel(upper ? c.toUpperCase() : c, mods.filter((m) => m !== 0xE1));
+    } else { typeChar(c); keyLabel(c, mods); }
+  }
+  clearLatched();
+}
+
+function specialAction(k, el) {
+  switch (k) {
+    case 'globe': case 'abc': kbdPage = null; switchIme(); break;
+    case 'num': case 'num123': kbdPage = 'num'; buildNativeKbd(); break;
+    case 'sym': kbdPage = 'sym'; buildNativeKbd(); break;
+    case 'letters': kbdPage = null; buildNativeKbd(); break;
+    case 'hide': setKbd(false); break;
+    case 'space': send(new Uint8Array([M.TAP, 0, 0x2C])); keyLabel('', []); break;
+    case 'ret': send(new Uint8Array([M.TAP, 0, 0x28])); keyLabel('enter', []); break;
+    case 'bs': send(new Uint8Array([M.TAP, 0, 0x2A])); break;
+    case 'shift': {
+      const now = performance.now(), st = latched.get(0xE1);
+      if (!st) latched.set(0xE1, 'latched');
+      else if (st === 'latched' && now - shiftTapAt < 350) latched.set(0xE1, 'locked');   // double tap = caps lock
+      else latched.delete(0xE1);
+      shiftTapAt = now; refreshKeys(); break;
+    }
+  }
+}
+
+function nativeKey(key) {
+  const el = document.createElement('button');
+  const sp = key.k;
+  el.className = 'nk' + (sp ? ' sp sp-' + sp : '');
+  el.style.flex = key.w || 1;
+  el._key = key;
+  if (sp) el.textContent = sp === 'abc' || sp === 'num' || sp === 'letters' ? '' : SPECIAL[sp];
+  else el.innerHTML = (key.fl ? `<span class="fl"></span>` : '') + `<span class="pl"></span>`;
+  if (!sp) { if (key.fl) el.querySelector('.fl').textContent = key.fl; el.querySelector('.pl').textContent = key.l; }
+  nkEls.push(el);
+  el.addEventListener('mousedown', (e) => e.preventDefault());
+  el.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); el.setPointerCapture(e.pointerId);
+    kbdTouches++;
+    el._t0 = performance.now(); el._y = e.clientY; el._x = e.clientX; el._dead = false; el._held = false; el._flick = false;
+    el.classList.add('down');
+    if (sp === 'bs') {   // hold to repeat (only when nothing else is touching)
+      el._repT = setTimeout(() => {
+        if (el._dead || (cfg.palm && kbdTouches !== 1)) return;
+        el._held = true; send(new Uint8Array([M.KEYDOWN, 0x2A]));
+      }, 380);
+    }
   });
+  el.addEventListener('pointermove', (e) => {
+    if (el._dead || el._held) return;
+    const dy = e.clientY - el._y, dx = Math.abs(e.clientX - el._x);
+    if (!sp && el._key.f !== undefined && el._key.fl && dy > 14 && dx < 30) {   // flick down = small label
+      if (!el._flick) { el._flick = true; el.classList.add('flick'); }
+    } else if (Math.hypot(dx, dy) > 30) { el._dead = true; el.classList.remove('down', 'flick'); }
+  });
+  const up = (e) => {
+    kbdTouches = Math.max(0, kbdTouches - 1);
+    clearTimeout(el._repT);
+    const wasDown = el.classList.contains('down');
+    el.classList.remove('down', 'flick');
+    if (el._held) { send(new Uint8Array([M.KEYUP, 0x2A])); el._held = false; return; }
+    if (!wasDown || el._dead || e.type === 'pointercancel') return;
+    if (cfg.palm && performance.now() - el._t0 > (el._flick ? 700 : TAP_MAX_MS)) return;   // resting, not typing
+    lastKeyAt = performance.now();
+    if (sp) specialAction(sp, el); else pressNative(el._key, el._flick);
+  };
+  el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  return el;
+}
+
+function buildNativeKbd() {
+  const kb = $('kbd'); kb.innerHTML = ''; nkEls.length = 0;
+  kb.className = 'native';
+  for (const row of NATIVE[layoutName()]) {
+    const r = document.createElement('div'); r.className = 'nrow';
+    for (const key of row) {
+      if (key.sp) { const s = document.createElement('div'); s.style.flex = key.sp; r.appendChild(s); continue; }
+      r.appendChild(nativeKey(key));
+    }
+    kb.appendChild(r);
+  }
+  refreshNative();
+}
+
+function refreshNative() {
+  const upper = latched.has(0xE1) !== hostCaps;
+  for (const el of nkEls) {
+    const key = el._key;
+    if (key.k === 'shift') { el.classList.toggle('on', latched.has(0xE1)); el.textContent = latched.get(0xE1) === 'locked' ? '⇪' : '⇧'; }
+    else if (key.k === 'num') el.textContent = '.?123';
+    else if (key.k === 'letters') el.textContent = zyMode ? 'ㄅㄆㄇ' : 'ABC';
+    else if (key.k === 'abc') el.textContent = 'abc';
+    else if (key.k === 'space') el.textContent = zyMode && !kbdPage ? '空格' : 'space';
+    else if (!key.k && key.c && /[a-z]/.test(key.c)) el.querySelector('.pl').textContent = upper ? key.l.toUpperCase() : key.l;
+  }
+}
+
+function buildKbd() {
+  buildNativeKbd();
   // Phone: one scrollable strip of special keys; letters come from the iOS keyboard.
   const strip = $('strip');
   const tog = document.createElement('button'); tog.className = 'k'; tog.textContent = '⌨️';
