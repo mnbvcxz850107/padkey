@@ -22,7 +22,7 @@
 #include "web_assets.h"
 #include "protocol.h"
 
-#define FW_VERSION "1.4.0"
+#define FW_VERSION "1.4.1"
 
 // ---- T-Dongle-S3 pins (from LilyGO examples) ----
 #define PIN_LCD_MOSI 3
@@ -118,8 +118,9 @@ static void loadSettings() {
   wifiPass = prefs.getString("pass", "");
   apPass = prefs.getString("appass", "");
   if (apPass.length() < 8) { apPass = randomDigits(8); prefs.putString("appass", apPass); }
+  uint64_t efuse = ESP.getEfuseMac();
   uint8_t mac[6];
-  WiFi.macAddress(mac);
+  for (int i = 0; i < 6; i++) mac[i] = (efuse >> (8 * i)) & 0xFF;
   char buf[24];
   snprintf(buf, sizeof(buf), "PadKey-%02X%02X", mac[4], mac[5]);
   apSsid = buf;
@@ -736,6 +737,7 @@ static void setupBle() {
     bleMtu = c.getMTU();
     BLEConnParams p = {12, 24, 0, 400};  // 15-30 ms interval: snappy cursor
     srv.updateConnParams(c.getHandle(), p);
+    BLE.getAdvertising().start();        // stay discoverable: allow another (re)connection
   });
   bleServer.onDisconnect([](BLEServer &srv, const BLEConnInfo &c, uint8_t reason) {
     bool was = bleIsAuthed(c.getHandle());

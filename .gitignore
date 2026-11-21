@@ -3,3 +3,4 @@ build/
 backup/
 web/icon-preview.png
 .flashing
+bridge.log

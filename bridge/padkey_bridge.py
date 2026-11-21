@@ -33,8 +33,14 @@ H_HELLO, H_PASTE, H_IMG_BEGIN, H_IMG_DATA, H_IMG_END = 1, 2, 3, 4, 5
 D_HELLO, D_TEXT, D_ACK = 0x81, 0x82, 0x83
 
 
+LOG_FILE = os.path.join(HERE, "..", "bridge.log")
+
+
 def log(*a):
-    print(time.strftime("%H:%M:%S"), *a, flush=True)
+    line = " ".join(str(x) for x in (time.strftime("%H:%M:%S"),) + a)
+    print(line, flush=True)
+    with open(LOG_FILE, "a") as f:
+        f.write(line + "\n")
 
 
 class Link:
