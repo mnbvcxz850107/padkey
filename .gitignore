@@ -1,0 +1,4 @@
+build/
+.build/
+backup/
+web/icon-preview.png

@@ -1,0 +1,2 @@
+#!/data/data/com.termux/files/usr/bin/bash
+exec /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/home/user/work/padkey/tools/native-bin/python3 -m esptool "$@"

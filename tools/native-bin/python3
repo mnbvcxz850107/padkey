@@ -1,0 +1,4 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# Debian's python3, run natively on Android through Debian's glibc loader.
+R=/data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs
+exec env -u LD_PRELOAD PYTHONHOME=$R/usr PYTHONPATH=/data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/home/user/work/.venv/lib/python3.13/site-packages $R/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1 --library-path $R/usr/lib/aarch64-linux-gnu $R/usr/bin/python3 "$@"

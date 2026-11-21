@@ -1,0 +1,4 @@
+directories:
+  data: /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/home/user/.arduino15
+  downloads: /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/home/user/.arduino15/staging
+  user: /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/home/user/Arduino
