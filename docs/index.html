@@ -419,28 +419,47 @@ function connect() {
   ws.onclose = () => { authed = false; setPill(false); if (token) setTimeout(connect, 1000); };
 }
 
+function errText(e) {
+  if (!e) return '未知錯誤';
+  if (typeof e === 'string') return e;
+  return [e.name, e.message, e.code].filter((x) => x !== undefined && x !== '').join(' ') || JSON.stringify(e) || String(e);
+}
+// Bluefy may only implement the older Web Bluetooth write API.
+function bleWrite(ch, data, withResponse) {
+  if (withResponse && ch.writeValueWithResponse) return ch.writeValueWithResponse(data);
+  if (!withResponse && ch.writeValueWithoutResponse) return ch.writeValueWithoutResponse(data);
+  return ch.writeValue(data);
+}
 async function bleConnect() {
+  let step = '';
   try {
     setPill(false);
-    const gatt = await bleDev.gatt.connect();
+    step = '連線';
+    const gatt = bleDev.gatt.connected ? bleDev.gatt : await bleDev.gatt.connect();
+    step = '找 PadKey 服務';
     const svc = await gatt.getPrimaryService(BLE_SVC);
+    step = '找指令通道';
     bleCmd = await svc.getCharacteristic(BLE_CMD);
+    step = '找回報通道';
     const evt = await svc.getCharacteristic(BLE_EVT);
     evt.addEventListener('characteristicvaluechanged', (e) => {
-      const u = new Uint8Array(e.target.value.buffer, e.target.value.byteOffset, e.target.value.byteLength);
+      const v = e.target.value;
+      const u = new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
       if (u[0] === 1) onBinary(u); else onServerText(new TextDecoder().decode(u));
     });
+    step = '開啟通知';
     await evt.startNotifications();
     $('bleOv').classList.remove('show');
+    step = '驗證配對';
     if (token) await bleCtrl('auth ' + token); else showPair();
   } catch (e) {
     bleCmd = null;
-    $('bleErr').textContent = '連線失敗：' + e.message;
-    setTimeout(() => bleDev && !bleDev.gatt.connected && bleConnect(), 2000);
+    $('bleErr').textContent = `「${step}」失敗：${errText(e)}`;
+    $('bleOv').classList.add('show');
   }
 }
 async function bleCtrl(text) {  // control commands: acknowledged write
-  if (bleCmd) await bleCmd.writeValueWithResponse(enc.encode(text));
+  if (bleCmd) await bleWrite(bleCmd, enc.encode(text), true);
 }
 function bleQueue(u) {
   const last = bleQ[bleQ.length - 1];
@@ -459,7 +478,7 @@ async function blePump() {
   bleBusy = true;
   while (bleQ.length && bleCmd) {
     const u = bleQ.shift();
-    try { await bleCmd.writeValueWithoutResponse(u); } catch (e) { /* dropped */ }
+    try { await bleWrite(bleCmd, u, false); } catch (e) { /* dropped */ }
   }
   bleBusy = false;
 }
@@ -1379,7 +1398,7 @@ $('bBle').onclick = async () => {
     bleDev = await navigator.bluetooth.requestDevice({ filters: [{ services: [BLE_SVC] }] });
     bleDev.addEventListener('gattserverdisconnected', () => { authed = false; bleCmd = null; setPill(false); setTimeout(bleConnect, 1000); });
     bleConnect();
-  } catch (e) { $('bleErr').textContent = e.message; }
+  } catch (e) { $('bleErr').textContent = errText(e); }
 };
 if (mode === 'ble') $('wifiSec').style.display = 'none';
 
@@ -1400,7 +1419,7 @@ async function sendUText(str) {
     const flags = (i === 0 ? 1 : 0) | (i + N >= b.length ? 2 : 0);
     const pkt = new Uint8Array([M.UTEXT, flags, ...b.slice(i, i + N)]);
     if (mode === 'ws') { if (ws && ws.readyState === 1) ws.send(pkt); }
-    else if (bleCmd) await bleCmd.writeValueWithResponse(pkt);   // acknowledged: keeps order, no size limit issues
+    else if (bleCmd) await bleWrite(bleCmd, pkt, true);   // acknowledged: keeps order
   }
 }
 async function sendCompose() {
