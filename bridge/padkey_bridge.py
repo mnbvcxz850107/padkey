@@ -159,6 +159,10 @@ def main():
         for typ, payload in link.frames(wait=0.1):
             if typ == D_TEXT:
                 handle_text(link, payload)
+            elif typ == D_HELLO and not getattr(link, "hello_logged", False):
+                link.hello_logged = True
+                # reset codes: 1=power-on 3=software 4=panic/crash 5/6/7=watchdog 9=brownout
+                log("dongle", payload.decode(errors="replace"))
         if now - last_scan > 1:
             last_scan = now
             shot = newest_shot(shots_since)

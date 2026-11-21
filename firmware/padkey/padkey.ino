@@ -22,7 +22,7 @@
 #include "web_assets.h"
 #include "protocol.h"
 
-#define FW_VERSION "1.4.1"
+#define FW_VERSION "1.4.2"
 
 // ---- T-Dongle-S3 pins (from LilyGO examples) ----
 #define PIN_LCD_MOSI 3
@@ -696,6 +696,7 @@ static std::vector<uint16_t> bleAuthed;
 static portMUX_TYPE bleMux = portMUX_INITIALIZER_UNLOCKED;
 static bool bleOk = false;
 static volatile uint16_t bleMtu = 23;
+static volatile bool bleReadvertise = false;
 
 static bool bleIsAuthed(uint16_t h) {
   bool r = false;
@@ -737,7 +738,7 @@ static void setupBle() {
     bleMtu = c.getMTU();
     BLEConnParams p = {12, 24, 0, 400};  // 15-30 ms interval: snappy cursor
     srv.updateConnParams(c.getHandle(), p);
-    BLE.getAdvertising().start();        // stay discoverable: allow another (re)connection
+    bleReadvertise = true;               // stay discoverable (done from loop(), not in this callback)
   });
   bleServer.onDisconnect([](BLEServer &srv, const BLEConnInfo &c, uint8_t reason) {
     bool was = bleIsAuthed(c.getHandle());
@@ -878,7 +879,12 @@ static void pollBridge() {
       const uint8_t *p = buf + 4;
       bridgeSeen = millis();
       switch (type) {
-        case H_HELLO: cdcSend(D_HELLO, (const uint8_t *)FW_VERSION, strlen(FW_VERSION)); break;
+        case H_HELLO: {
+          char hb[48];
+          snprintf(hb, sizeof(hb), "%s reset=%d up=%lus", FW_VERSION, (int)esp_reset_reason(), (unsigned long)(millis() / 1000));
+          cdcSend(D_HELLO, (const uint8_t *)hb, strlen(hb));
+          break;
+        }
         case H_PASTE: { const uint8_t m[] = {M_TAP, 0x01, 0x19}; enqueue(m, 3);         // Ctrl+V
                         broadcastText("utext pasted"); break; }
         case H_IMG_BEGIN: { String a; a.concat((const char *)p, need); broadcastText("img " + a);
@@ -975,6 +981,7 @@ void loop() {
   }
 
   pollBridge();
+  if (bleReadvertise) { bleReadvertise = false; delay(50); if (bleOk) BLE.getAdvertising().start(); }
   handleButton();
   if (rebootAt && now > rebootAt) ESP.restart();
   delay(1);
