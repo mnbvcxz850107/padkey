@@ -34,9 +34,9 @@ def arr(name, data):
 
 html = open(os.path.join(root, "web", "index.html"), "rb").read()
 manifest = json.dumps({
-    "name": "PadKey", "short_name": "PadKey", "start_url": "/", "display": "standalone",
+    "name": "PadKey", "short_name": "PadKey", "start_url": "./", "display": "standalone",
     "orientation": "any", "background_color": "#05010f", "theme_color": "#05010f",
-    "icons": [{"src": "/icon.png", "sizes": "180x180", "type": "image/png"}],
+    "icons": [{"src": "icon.png", "sizes": "180x180", "type": "image/png"}],
 }).encode()
 png = icon()
 open(os.path.join(root, "web", "icon-preview.png"), "wb").write(png)
@@ -46,3 +46,12 @@ with open(out, "w") as f:
     f.write(arr("manifest_json_gz", gzip.compress(manifest, 9, mtime=0)))
     f.write(arr("icon_png", png))
 print("assets:", len(html), "->", len(gzip.compress(html, 9)), "bytes html; icon", len(png))
+
+# Static copy for GitHub Pages (Bluetooth mode needs https).
+site = os.path.join(root, "docs")
+os.makedirs(site, exist_ok=True)
+open(os.path.join(site, "index.html"), "wb").write(html)
+open(os.path.join(site, "manifest.json"), "wb").write(manifest)
+open(os.path.join(site, "icon.png"), "wb").write(png)
+open(os.path.join(site, "apple-touch-icon.png"), "wb").write(png)
+open(os.path.join(site, ".nojekyll"), "w").close()

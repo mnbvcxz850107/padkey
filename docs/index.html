@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PadKey">
+<meta name="theme-color" content="#05010f">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>PadKey</title>
+<style>
+:root {
+  --bg: #05010f; --panel: #0d0620; --cyan: #00f0ff; --pink: #ff2bd6; --yellow: #ffe600;
+  --green: #39ff88; --text: #e8e6ff; --dim: #7a6fa8; --key: #140a2e; --keyb: #2a1a55;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden;
+  font-family: -apple-system, "PingFang TC", "Helvetica Neue", sans-serif; overscroll-behavior: none; }
+body { display: flex; flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  background: radial-gradient(ellipse at 20% 0%, #2a0a4a 0%, transparent 55%), radial-gradient(ellipse at 100% 100%, #002a3a 0%, transparent 50%), var(--bg); }
+button { font: inherit; color: inherit; border: none; background: none; }
+
+/* ---------- header ---------- */
+header { display: flex; align-items: center; gap: 10px; padding: 8px 12px; height: 52px; flex: none; }
+.logo { font-weight: 900; font-size: 22px; letter-spacing: 3px; font-style: italic;
+  background: linear-gradient(90deg, var(--cyan), var(--pink)); -webkit-background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 6px rgba(0,240,255,.6)); }
+.pill { font-size: 12px; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--dim); color: var(--dim); white-space: nowrap; }
+.pill.ok { border-color: var(--green); color: var(--green); box-shadow: 0 0 8px rgba(57,255,136,.4); }
+.pill.bad { border-color: var(--pink); color: var(--pink); }
+.spacer { flex: 1; }
+.hbtn { height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--keyb); background: var(--key); font-size: 15px; }
+.hbtn.on { border-color: var(--cyan); box-shadow: 0 0 10px rgba(0,240,255,.5) inset, 0 0 8px rgba(0,240,255,.4); color: var(--cyan); }
+
+/* ---------- main area ---------- */
+main { flex: 1; display: flex; gap: 10px; padding: 0 10px 10px; min-height: 0; }
+.padwrap { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+#pad { flex: 1; position: relative; border-radius: 18px; overflow: hidden; touch-action: none;
+  background: linear-gradient(135deg, rgba(0,240,255,.05), rgba(255,43,214,.05)), repeating-linear-gradient(0deg, transparent 0 39px, rgba(122,111,168,.12) 39px 40px), repeating-linear-gradient(90deg, transparent 0 39px, rgba(122,111,168,.12) 39px 40px);
+  border: 1.5px solid rgba(0,240,255,.45); box-shadow: 0 0 18px rgba(0,240,255,.2) inset, 0 0 12px rgba(255,43,214,.15); }
+#pad .hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center;
+  color: rgba(232,230,255,.25); font-size: 15px; line-height: 1.8; pointer-events: none; }
+.dot { position: absolute; width: 60px; height: 60px; margin: -30px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, rgba(0,240,255,.55), rgba(0,240,255,0) 70%); }
+#pad.tapped { animation: padtap .25s ease-out; }
+@keyframes padtap { from { box-shadow: 0 0 40px rgba(0,240,255,.6) inset; } to { box-shadow: 0 0 18px rgba(0,240,255,.2) inset; } }
+#pad.press { animation: padpress .3s ease-out; }
+@keyframes padpress { from { box-shadow: 0 0 60px rgba(255,43,214,.8) inset; } }
+#pad.dragging { border-color: var(--pink); box-shadow: 0 0 30px rgba(255,43,214,.45) inset, 0 0 14px rgba(255,43,214,.4); }
+#pad.swiped { animation: padtap .4s ease-out; }
+.trail { position: absolute; width: 10px; height: 10px; margin: -5px; border-radius: 50%; pointer-events: none;
+  background: var(--pink); box-shadow: 0 0 10px var(--pink); animation: fade .5s forwards; }
+@keyframes fade { to { opacity: 0; transform: scale(.2); } }
+.clicks { display: flex; gap: 8px; height: 56px; flex: none; }
+.clicks button { flex: 1; border-radius: 14px; background: var(--key); border: 1.5px solid var(--keyb); font-size: 14px; color: var(--dim); touch-action: none; }
+.clicks button.down { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 14px rgba(0,240,255,.5); }
+
+/* ---------- FX panel ---------- */
+#fx { width: 300px; flex: none; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 2px; }
+#fx h3 { margin: 10px 2px 6px; font-size: 12px; letter-spacing: 2px; color: var(--dim); font-weight: 600; }
+#fx h3:first-child { margin-top: 0; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.fb { position: relative; height: 62px; border-radius: 14px; background: var(--key); border: 1.5px solid var(--keyb); overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 22px; }
+.fb small { font-size: 11px; color: var(--dim); }
+.fb.c1 { border-color: rgba(0,240,255,.5); } .fb.c2 { border-color: rgba(255,43,214,.5); } .fb.c3 { border-color: rgba(255,230,0,.5); } .fb.c4 { border-color: rgba(57,255,136,.5); }
+@keyframes hot { 0% { transform: scale(.92); box-shadow: 0 0 30px var(--glow, var(--cyan)); } 100% { transform: scale(1); box-shadow: 0 0 0 transparent; } }
+.ripple { position: absolute; border-radius: 50%; width: 10px; height: 10px; margin: -5px; pointer-events: none;
+  background: var(--glow, var(--cyan)); opacity: .6; animation: ripple .55s ease-out forwards; }
+@keyframes ripple { to { transform: scale(22); opacity: 0; } }
+.fb.mac { font-size: 13px; padding: 0 4px; text-align: center; }
+
+/* ---------- keyboard ---------- */
+#kbd { flex: none; padding: 6px 8px 8px; background: rgba(13,6,32,.85); border-top: 1px solid rgba(0,240,255,.25); display: none; }
+.row { display: flex; gap: 5px; margin-bottom: 5px; }
+.row:last-child { margin-bottom: 0; }
+.k { flex: 1; height: 46px; border-radius: 9px; background: var(--key); border: 1px solid var(--keyb); font-size: 17px; position: relative; touch-action: none;
+  display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 0 #000; transition: background .08s; }
+.k.fn { height: 34px; font-size: 12px; color: var(--dim); }
+.k.mod { color: var(--dim); font-size: 14px; }
+.k.down { background: #2c1460; border-color: var(--pink); box-shadow: 0 0 14px rgba(255,43,214,.7); color: #fff; transform: translateY(1px); }
+.k.latched { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 10px rgba(0,240,255,.6); }
+.k.locked { background: rgba(0,240,255,.2); }
+.k.globe { font-size: 18px; }
+.k.capson { border-color: var(--yellow); color: var(--yellow); box-shadow: 0 0 10px rgba(255,230,0,.6); }
+.k b { font-size: 19px; font-weight: 500; color: #ffd7f6; }
+.k i { position: absolute; right: 5px; top: 2px; font-size: 10px; font-style: normal; color: var(--dim); }
+body.phone .k b { font-size: 16px; }
+#tbZy, #stripZy { flex: none; height: 44px; min-width: 56px; border-radius: 8px; background: #1c1c1f; font-size: 15px; color: #ddd; }
+#tbZy.on, #stripZy.on { color: var(--pink); box-shadow: 0 0 10px rgba(255,43,214,.6) inset; }
+body.phone.zy[data-tab=kbd] #kbd { display: block; }
+body.phone .k { min-width: 0; padding: 0; }
+body.phone:not(.land) .row { gap: 3px; margin-bottom: 4px; }
+body.phone:not(.land) #kbd { padding: 4px 4px 6px; }
+body.phone:not(.land) .k { font-size: 13px; border-radius: 6px; }
+body.phone:not(.land) .k.mod { font-size: 11px; }
+body.phone:not(.land) .k i { display: none; }
+body.phone.zy[data-tab=kbd]:not(.land) .clicks { display: none; }
+.w15 { flex: 1.5; } .w175 { flex: 1.75; } .w2 { flex: 2.2; } .w6 { flex: 6.5; }
+
+/* ---------- overlays ---------- */
+.overlay { position: fixed; inset: 0; background: rgba(5,1,15,.92); display: none; align-items: center; justify-content: center; z-index: 10; }
+.overlay.show { display: flex; }
+.card { width: min(460px, 92vw); max-height: 90vh; overflow-y: auto; background: var(--panel); border: 1px solid rgba(0,240,255,.4); border-radius: 20px; padding: 22px;
+  box-shadow: 0 0 40px rgba(0,240,255,.15), 0 0 80px rgba(255,43,214,.1); -webkit-user-select: text; user-select: text; }
+.card h2 { margin: 0 0 6px; font-size: 22px; }
+.card p { color: var(--dim); font-size: 14px; line-height: 1.6; margin: 6px 0 14px; }
+.pin { display: flex; gap: 8px; justify-content: center; margin: 14px 0; }
+.pin span { width: 46px; height: 58px; border-radius: 12px; border: 1.5px solid var(--keyb); display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; }
+.pin span.f { border-color: var(--cyan); box-shadow: 0 0 10px rgba(0,240,255,.4); }
+.numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.numpad button { height: 56px; border-radius: 12px; background: var(--key); border: 1px solid var(--keyb); font-size: 22px; }
+.numpad button:active { border-color: var(--pink); }
+.err { color: var(--pink); text-align: center; min-height: 20px; font-size: 14px; }
+label.set { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 14px 0; font-size: 15px; }
+input[type=range] { flex: 1; max-width: 220px; accent-color: var(--cyan); }
+input[type=text], input[type=password] { width: 100%; height: 44px; border-radius: 10px; border: 1px solid var(--keyb); background: var(--key); color: var(--text); padding: 0 12px; font-size: 16px; -webkit-user-select: text; user-select: text; }
+.btn { width: 100%; height: 46px; border-radius: 12px; margin-top: 10px; font-size: 16px; font-weight: 600;
+  background: linear-gradient(90deg, rgba(0,240,255,.25), rgba(255,43,214,.25)); border: 1px solid var(--cyan); }
+.btn.ghost { background: var(--key); border-color: var(--keyb); font-weight: 400; }
+.nets button { display: flex; justify-content: space-between; width: 100%; padding: 10px 12px; border-radius: 10px; background: var(--key); margin-bottom: 6px; font-size: 15px; }
+hr { border: none; border-top: 1px solid var(--keyb); margin: 18px 0; }
+#sysin { position: fixed; left: 0; bottom: 0; width: 1px; height: 1px; opacity: .01; font-size: 16px; border: 0; padding: 0; }
+.toast { position: fixed; left: 50%; top: 70px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--pink); border-radius: 12px;
+  padding: 10px 18px; z-index: 20; font-size: 14px; display: none; }
+
+#tabs, #strip { display: none; }
+#tabs { flex: none; gap: 6px; padding: 6px 10px 4px; }
+#tabs button { flex: 1; height: 52px; border-radius: 14px; background: var(--key); border: 1px solid var(--keyb); font-size: 12px; color: var(--dim);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+#tabs button span { font-size: 20px; }
+#tabs button.on { color: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 12px rgba(0,240,255,.45); }
+#strip { flex: none; gap: 6px; overflow-x: auto; padding: 6px 8px; -webkit-overflow-scrolling: touch; }
+#strip .k { flex: none; min-width: 50px; height: 44px; font-size: 14px; padding: 0 10px; }
+body.phone header { height: 44px; padding: 4px 10px; gap: 6px; }
+body.phone .logo { font-size: 18px; letter-spacing: 2px; }
+body.phone #bKbd, body.phone #bSys { display: none; }
+body.phone #tabs { display: flex; }
+body.phone main { flex-direction: column; padding: 0 8px 4px; }
+body.phone #fx { width: auto; height: auto; flex: 1; }
+body.phone .grid { grid-template-columns: repeat(3, 1fr); }
+body.phone.land .grid { grid-template-columns: repeat(6, 1fr); }
+body.phone[data-tab=pad] #fx, body.phone[data-tab=kbd] #fx { display: none; }
+body.phone[data-tab=fx] .padwrap { display: none; }
+body.phone #kbd { display: none; }
+body.phone.land[data-tab=kbd] #kbd { display: block; }
+body.phone.land[data-tab=kbd] .clicks { display: none; }
+body.phone[data-tab=kbd]:not(.land) #strip { display: flex; }
+body.phone .clicks { height: 48px; }
+body.phone .k { height: 38px; font-size: 15px; border-radius: 7px; }
+body.phone .row { gap: 4px; margin-bottom: 4px; }
+body.phone .fnrow { display: none; }
+body.phone .pill { font-size: 11px; padding: 3px 8px; }
+body.phone #pad .hint { font-size: 13px; padding: 0 16px; }
+
+/* ---------- MacBook-style iPad layout: Touch Bar / keyboard / trackpad ---------- */
+#touchbar { display: flex; gap: 6px; align-items: center; margin: 0 10px 8px; padding: 6px; height: 58px; flex: none; order: 1;
+  background: #000; border-radius: 14px; border: 1px solid #1f1f24; box-shadow: 0 0 18px rgba(255,43,214,.12), 0 0 18px rgba(0,240,255,.08); }
+header { order: 0; }
+body:not(.phone) #kbd { order: 2; display: block; background: none; border: none; padding: 0 10px 8px; }
+body:not(.phone).nokbd #kbd { display: none; }
+body:not(.phone) main { order: 3; justify-content: center; flex-direction: row !important; }
+body:not(.phone) .padwrap { flex: none; width: min(800px, 74%); }
+body:not(.phone) .clicks { display: none; }
+body:not(.phone) #fx { display: none; }
+body.phone #touchbar { display: none; }
+.fnrow { display: none; }
+.tb-scroll { flex: 1; display: flex; gap: 6px; align-items: center; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; height: 100%; }
+.tb-scroll::-webkit-scrollbar { display: none; }
+.tb { flex: none; height: 44px; padding: 0 12px; border-radius: 8px; background: #1c1c1f; font-size: 19px; position: relative; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; gap: 6px; touch-action: pan-x; }
+.tb small { font-size: 12px; color: #a3a3b8; }
+.tb.cand { min-width: 92px; background: #24122e; font-size: 20px; }
+.tb.cand small { color: #ffb8ef; font-size: 13px; }
+.tb-sep { flex: none; width: 1px; height: 26px; background: #34343c; margin: 0 4px; }
+#touchbar .k { flex: none; height: 44px; min-width: 62px; border: none; border-radius: 8px; background: #1c1c1f; box-shadow: none; font-size: 14px; color: #ddd; }
+#touchbar .k.down { background: #2c1460; box-shadow: 0 0 14px rgba(255,43,214,.7); }
+#tbFn { flex: none; height: 44px; min-width: 56px; border-radius: 8px; background: #1c1c1f; font-size: 14px; color: #ddd; }
+#tbFn.on { color: var(--cyan); box-shadow: 0 0 10px rgba(0,240,255,.55) inset; }
+.tb-scroll .k { min-width: 0 !important; flex: 1 !important; }
+.hot { animation: hot .45s ease-out; }
+
+@media (orientation: portrait) {
+  main { flex-direction: column; }
+  #fx { width: auto; height: 34%; flex: none; }
+  .grid { grid-template-columns: repeat(5, 1fr); }
+  body:not(.phone) .padwrap { width: 94%; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">PADKEY</div>
+  <span id="st" class="pill bad">未連線</span>
+  <span id="usb" class="pill">USB</span>
+  <div class="spacer"></div>
+  <button class="hbtn" id="bSys">🍎 iPad 鍵盤</button>
+  <button class="hbtn" id="bKbd">⌨️ 鍵盤</button>
+  <button class="hbtn" id="bSet">⚙️</button>
+</header>
+<div id="touchbar"><div class="tb-scroll" id="tbScroll"></div><button id="tbZy">注</button><button id="tbFn">fn</button></div>
+
+<main>
+  <div class="padwrap">
+    <div id="pad"><div class="hint">一指移動 · 輕點＝左鍵 · 兩指輕點＝右鍵 · 兩指捲動／捏合縮放<br>三指拖曳 · 點一下再按住拖曳 · 長按後移動＝拖曳 · 四指滑動＝切換／主畫面／返回</div></div>
+    <div class="clicks"><button id="bL">左鍵</button><button id="bM" style="flex:.5">中</button><button id="bR">右鍵</button></div>
+  </div>
+  <div id="fx"></div>
+</main>
+
+<div id="strip"></div>
+<div id="kbd"></div>
+<nav id="tabs">
+  <button data-t="pad"><span>🖐</span>觸控板</button>
+  <button data-t="kbd"><span>⌨️</span>鍵盤</button>
+  <button data-t="fx"><span>✨</span>炫砲</button>
+</nav>
+<textarea id="sysin" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
+
+<div class="overlay" id="pair"><div class="card">
+  <h2>🔐 配對 PadKey</h2>
+  <p>請輸入 T-Dongle 小螢幕上顯示的 6 位數 PIN 碼。<br>配對一次後就會記住這台 iPad。</p>
+  <div class="pin" id="pinShow"></div>
+  <div class="err" id="pinErr"></div>
+  <div class="numpad" id="numpad"></div>
+</div></div>
+
+<div class="overlay" id="settings"><div class="card">
+  <h2>⚙️ 設定</h2>
+  <label class="set">游標速度 <input type="range" id="sSpeed" min="0.5" max="4" step="0.1"></label>
+  <label class="set">加速度 <input type="range" id="sAccel" min="0" max="2" step="0.1"></label>
+  <label class="set">捲動速度 <input type="range" id="sScroll" min="0.3" max="3" step="0.1"></label>
+  <label class="set">自然捲動（像 iPad） <input type="checkbox" id="sNatural"></label>
+  <label class="set">防誤觸（可以把手放在上面打字） <input type="checkbox" id="sPalm"></label>
+  <label class="set">🌐 中英切換快捷鍵
+    <select id="sIme" style="height:36px;border-radius:8px;background:var(--key);color:var(--text);border:1px solid var(--keyb);font-size:15px">
+      <option value="ctrl">Ctrl + 空白（Gboard）</option>
+      <option value="shift">Shift + 空白（三星鍵盤）</option>
+      <option value="altshift">Alt + Shift</option>
+      <option value="none">不送快捷鍵</option>
+    </select></label>
+  <hr>
+  <div id="wifiSec">
+  <h2>📶 熱點</h2>
+  <p id="apNow"></p>
+  <div><input type="text" id="apPassIn" placeholder="新的熱點密碼（至少 8 個字）"></div>
+  <button class="btn" id="bApPass">更改熱點密碼</button>
+  <p>改完 T-Dongle 會重新啟動，iPad／iPhone 要到 Wi‑Fi 設定「忘記此網路」後用新密碼重連。</p>
+  <hr>
+  <h2>🏠 家用 Wi‑Fi（選用）</h2>
+  <p id="wifiNow"></p>
+  <div class="nets" id="nets"></div>
+  <button class="btn ghost" id="bScan">掃描網路</button>
+  <div style="margin-top:12px"><input type="text" id="wSsid" placeholder="Wi‑Fi 名稱"></div>
+  <div style="margin-top:8px"><input type="password" id="wPass" placeholder="密碼"></div>
+  <button class="btn ghost" id="bWifi">改連家用 Wi‑Fi</button>
+  <button class="btn ghost" id="bForget" style="display:none">改回只用熱點</button>
+  </div>
+  <hr>
+  <button class="btn ghost" id="bUnpair">取消這台 iPad 的配對</button>
+  <button class="btn" id="bClose">完成</button>
+  <p id="fwInfo" style="text-align:center"></p>
+</div></div>
+
+<div class="overlay" id="bleOv"><div class="card">
+  <h2>🔵 藍牙連線</h2>
+  <p>確定 T-Dongle 有插電，點下面的按鈕，在清單裡選「PadKey-XXXX」。</p>
+  <button class="btn" id="bBle">搜尋 PadKey</button>
+  <div class="err" id="bleErr"></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+
+// ------------------------------------------------------------ settings
+const cfg = Object.assign({ speed: 1.6, accel: 0.8, scroll: 1, natural: true, palm: true, ime: 'ctrl' }, JSON.parse(localStorage.padkeyCfg || '{}'));
+const saveCfg = () => localStorage.padkeyCfg = JSON.stringify(cfg);
+
+function toast(msg, ms = 2200) {
+  const t = $('toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.style.display = 'none', ms);
+}
+
+// ------------------------------------------------------------ connection
+const M = { MOVE: 1, BTN: 2, SCROLL: 3, KEYDOWN: 4, KEYUP: 5, TAP: 6, TEXT: 7, CONSUMER: 8, RELEASE: 9, FX: 10, LABEL: 11 };
+const enc = new TextEncoder();
+// Two transports, same messages:
+//  * Wi-Fi WebSocket when the page is served by the dongle (Safari, hotspot)
+//  * Bluetooth LE when opened over https in a Web Bluetooth browser (Bluefy)
+const BLE_SVC = '6b1a0001-4d2f-4c8e-a5b1-7061646b6579';
+const BLE_CMD = '6b1a0002-4d2f-4c8e-a5b1-7061646b6579';
+const BLE_EVT = '6b1a0003-4d2f-4c8e-a5b1-7061646b6579';
+const mode = location.protocol === 'http:' ? 'ws' : 'ble';
+let ws = null, authed = false, token = localStorage.padkeyToken || '';
+let bleDev = null, bleCmd = null, bleQ = [], bleBusy = false, pairWaiter = null;
+
+function onServerText(s) {
+  if (s === 'bad') { authed = false; token = ''; localStorage.removeItem('padkeyToken'); showPair(); return; }
+  if (s.startsWith('ok ')) { authed = true; status(JSON.parse(s.slice(3))); }
+  else if (s.startsWith('st ')) status(JSON.parse(s.slice(3)));
+  else if (s.startsWith('token ') && pairWaiter) { pairWaiter(s.slice(6)); pairWaiter = null; }
+  else if (s === 'badpin' && pairWaiter) { pairWaiter(null); pairWaiter = null; }
+}
+
+function connect() {
+  if (mode === 'ble') { if (bleDev) bleConnect(); else $('bleOv').classList.add('show'); return; }
+  if (!token) { showPair(); return; }
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = () => ws.send('auth ' + token);
+  ws.onmessage = (e) => onServerText(String(e.data));
+  ws.onclose = () => { authed = false; setPill(false); if (token) setTimeout(connect, 1000); };
+}
+
+async function bleConnect() {
+  try {
+    setPill(false);
+    const gatt = await bleDev.gatt.connect();
+    const svc = await gatt.getPrimaryService(BLE_SVC);
+    bleCmd = await svc.getCharacteristic(BLE_CMD);
+    const evt = await svc.getCharacteristic(BLE_EVT);
+    evt.addEventListener('characteristicvaluechanged', (e) => onServerText(new TextDecoder().decode(e.target.value)));
+    await evt.startNotifications();
+    $('bleOv').classList.remove('show');
+    if (token) await bleCtrl('auth ' + token); else showPair();
+  } catch (e) {
+    bleCmd = null;
+    $('bleErr').textContent = '連線失敗：' + e.message;
+    setTimeout(() => bleDev && !bleDev.gatt.connected && bleConnect(), 2000);
+  }
+}
+async function bleCtrl(text) {  // control commands: acknowledged write
+  if (bleCmd) await bleCmd.writeValueWithResponse(enc.encode(text));
+}
+function bleQueue(u) {
+  const last = bleQ[bleQ.length - 1];
+  if (u[0] === M.MOVE && last && last[0] === M.MOVE) {
+    // Merge cursor moves while the radio is busy so the cursor never lags behind.
+    const a = new DataView(last.buffer), b = new DataView(u.buffer, u.byteOffset);
+    const cl = (v) => Math.max(-32000, Math.min(32000, v));
+    a.setInt16(1, cl(a.getInt16(1, true) + b.getInt16(1, true)), true);
+    a.setInt16(3, cl(a.getInt16(3, true) + b.getInt16(3, true)), true);
+  } else bleQ.push(u);
+  if (bleQ.length > 200) bleQ.splice(0, bleQ.length - 200);
+  blePump();
+}
+async function blePump() {
+  if (bleBusy || !bleCmd) return;
+  bleBusy = true;
+  while (bleQ.length && bleCmd) {
+    const u = bleQ.shift();
+    try { await bleCmd.writeValueWithoutResponse(u); } catch (e) { /* dropped */ }
+  }
+  bleBusy = false;
+}
+function toBytes(b) {
+  if (b instanceof Uint8Array) return new Uint8Array(b);  // copy: queued moves get mutated
+  return new Uint8Array(b.slice ? b.slice(0) : b);
+}
+function send(bytes) {
+  if (!authed) return;
+  if (mode === 'ws') { if (ws && ws.readyState === 1) ws.send(bytes); }
+  else bleQueue(toBytes(bytes));
+}
+async function pairStartReq() {
+  if (mode === 'ws') return fetch('/api/pairstart', { method: 'POST' }).catch(() => {});
+  return bleCtrl('pairstart').catch(() => {});
+}
+async function pairTryReq(pin) {
+  if (mode === 'ws') {
+    const r = await fetch('/api/pair', { method: 'POST', body: new URLSearchParams({ pin }) });
+    return r.ok ? (await r.json()).token : null;
+  }
+  const p = new Promise((res) => { pairWaiter = res; setTimeout(() => res(null), 5000); });
+  await bleCtrl('pair ' + pin);
+  return p;
+}
+let info = {};
+function status(j) {
+  info = j; setPill(true);
+  if (j.caps !== undefined && j.caps !== hostCaps) { hostCaps = j.caps; refreshKeys(); }
+  const u = $('usb'); u.textContent = j.usb ? 'USB ✓' : 'USB ✗'; u.className = 'pill ' + (j.usb ? 'ok' : 'bad');
+}
+function setPill(ok) {
+  const p = $('st'); p.textContent = ok ? '● 已連線' : '○ 連線中…'; p.className = 'pill ' + (ok ? 'ok' : 'bad');
+}
+function sendText(str) {
+  const b = enc.encode(str), n = mode === 'ble' ? 18 : 80;
+  for (let i = 0; i < b.length; i += n) send(new Uint8Array([M.TEXT, ...b.slice(i, i + n)]));
+}
+function label(txt, color) {
+  // color: RGB565 for the dongle screen; ASCII only (the dongle font has no CJK)
+  const t = enc.encode(txt.replace(/[^\x20-\x7e]/g, '').slice(0, 14));
+  send(new Uint8Array([M.LABEL, color & 255, color >> 8, ...t]));
+}
+const C565 = { cyan: 0x07FF, pink: 0xF81F, yellow: 0xFFE0, green: 0x07E8, white: 0xFFFF };
+
+// ------------------------------------------------------------ pairing
+let pinBuf = '';
+function showPair() {
+  $('pair').classList.add('show'); pinBuf = ''; drawPin();
+  pairStartReq();
+}
+function drawPin() {
+  $('pinShow').innerHTML = [...Array(6)].map((_, i) => `<span class="${i < pinBuf.length ? 'f' : ''}">${pinBuf[i] || ''}</span>`).join('');
+}
+['1','2','3','4','5','6','7','8','9','重顯','0','⌫'].forEach((n) => {
+  const b = document.createElement('button'); b.textContent = n;
+  b.onclick = async () => {
+    $('pinErr').textContent = '';
+    if (n === '⌫') pinBuf = pinBuf.slice(0, -1);
+    else if (n === '重顯') { pairStartReq(); pinBuf = ''; }
+    else if (pinBuf.length < 6) pinBuf += n;
+    drawPin();
+    if (pinBuf.length === 6) {
+      const t = await pairTryReq(pinBuf);
+      if (t) {
+        token = t; localStorage.padkeyToken = token; $('pair').classList.remove('show');
+        if (mode === 'ws') connect(); else bleCtrl('auth ' + token);
+      }
+      else { $('pinErr').textContent = 'PIN 不對，再試一次'; pinBuf = ''; drawPin(); }
+    }
+  };
+  $('numpad').appendChild(b);
+});
+
+// ------------------------------------------------------------ touchpad
+// MacBook-style trackpad built on Touch Events (reliable multi-touch on iOS).
+const pad = $('pad');
+let btnMask = 0;
+function setBtn(mask) { if (mask !== btnMask) { btnMask = mask; send(new Uint8Array([M.BTN, mask])); } }
+function click(b) { setBtn(btnMask | b); setTimeout(() => setBtn(btnMask & ~b), 25); }
+
+// Cursor deltas are batched once per frame.
+let pendX = 0, pendY = 0, fracX = 0, fracY = 0;
+function flush() {
+  if (pendX || pendY) {
+    const b = new DataView(new ArrayBuffer(5));
+    b.setUint8(0, M.MOVE);
+    b.setInt16(1, Math.max(-32000, Math.min(32000, pendX)), true);
+    b.setInt16(3, Math.max(-32000, Math.min(32000, pendY)), true);
+    send(b.buffer); pendX = pendY = 0;
+  }
+  requestAnimationFrame(flush);
+}
+requestAnimationFrame(flush);
+
+function moveCursor(dx, dy, dt) {
+  // macOS-like acceleration: precise when slow, covers distance when flicked.
+  const v = Math.hypot(dx, dy) / Math.max(dt, 4);          // px per ms
+  const gain = cfg.speed * (0.55 + cfg.accel * Math.min(v * 1.4, 3.2));
+  fracX += dx * gain; fracY += dy * gain;
+  const ix = Math.trunc(fracX), iy = Math.trunc(fracY);
+  fracX -= ix; fracY -= iy; pendX += ix; pendY += iy;
+}
+
+// Scrolling (integer wheel notches, fractional remainder kept) + inertia.
+let scrAccV = 0, scrAccH = 0, momentum = null;
+function scrollBy(dy, dx) {
+  const dir = cfg.natural ? 1 : -1, step = 18 / cfg.scroll;
+  scrAccV += dy * dir; scrAccH -= dx * dir;
+  const sv = Math.trunc(scrAccV / step), sh = Math.trunc(scrAccH / step);
+  if (sv || sh) {
+    scrAccV -= sv * step; scrAccH -= sh * step;
+    send(new Uint8Array([M.SCROLL, Math.max(-127, Math.min(127, sv)) & 255, Math.max(-127, Math.min(127, sh)) & 255]));
+  }
+}
+function startMomentum(vx, vy) {
+  let last = performance.now();
+  momentum = { vx, vy };
+  const step = (now) => {
+    if (!momentum) return;
+    const dt = now - last; last = now;
+    momentum.vx *= Math.pow(0.94, dt / 16); momentum.vy *= Math.pow(0.94, dt / 16);
+    if (Math.hypot(momentum.vx, momentum.vy) < 0.03) { momentum = null; return; }
+    scrollBy(momentum.vy * dt, momentum.vx * dt);
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+// Visuals: finger glows + feedback flash.
+const glowEls = [];
+function drawFingers(list) {
+  const r = pad.getBoundingClientRect();
+  while (glowEls.length < list.length) { const d = document.createElement('div'); d.className = 'dot'; pad.appendChild(d); glowEls.push(d); }
+  glowEls.forEach((d, i) => {
+    const t = list[i];
+    d.style.display = t ? 'block' : 'none';
+    if (t) { d.style.left = (t.clientX - r.left) + 'px'; d.style.top = (t.clientY - r.top) + 'px'; }
+  });
+  pad.classList.toggle('dragging', (btnMask & 1) === 1);
+}
+function flash(cls) { pad.classList.remove(cls); void pad.offsetWidth; pad.classList.add(cls); }
+
+// Gesture session: from the first finger down until all fingers are up.
+let S = null;                    // current session
+let lastTap = { t: 0, x: 0, y: 0 };
+const TAP_MS = 280, TAP_SLOP = 12, LONG_MS = 450;
+const TYPING_GUARD_MS = 450;      // like macOS: ignore the trackpad right after typing
+function isPalm(t) { return cfg.palm && ((t.radiusX || 0) > 28 || (t.radiusY || 0) > 28); }
+function typingGuard() { return cfg.palm && (performance.now() - lastKeyAt < TYPING_GUARD_MS || kbdTouches > 0); }
+
+function centroid(tl) {
+  let x = 0, y = 0;
+  for (const t of tl) { x += t.clientX; y += t.clientY; }
+  return { x: x / tl.length, y: y / tl.length };
+}
+function spread(tl) {
+  if (tl.length < 2) return 0;
+  return Math.hypot(tl[0].clientX - tl[1].clientX, tl[0].clientY - tl[1].clientY);
+}
+function rebase(tl, now) {        // finger count changed: avoid jumps
+  S.n = tl.length; S.c = centroid(tl); S.d = spread(tl); S.lastT = now;
+}
+
+pad.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const now = performance.now();
+  momentum = null;
+  const tl = [...e.touches].filter((t) => !isPalm(t));
+  if (!tl.length) return;
+  if (!S && typingGuard()) { S = { ignore: true, n: tl.length }; return; }
+  if (S && S.ignore) return;
+  if (!S) {
+    const c = centroid(tl);
+    S = { t0: now, maxF: tl.length, travel: 0, mode: 'none', swipe: { x: 0, y: 0 }, pinchAcc: 0, vel: [], held: false, start: c };
+    // Second tap shortly after a tap, near the same spot: press and drag.
+    if (tl.length === 1 && now - lastTap.t < TAP_MS && Math.hypot(c.x - lastTap.x, c.y - lastTap.y) < 60) {
+      S.mode = 'tapdrag'; S.held = true; setBtn(btnMask | 1);
+    }
+    if (tl.length === 1 && S.mode === 'none') {
+      S.longTimer = setTimeout(() => {
+        if (S && !S.ignore && S.n === 1 && S.travel < TAP_SLOP && S.mode === 'none' && !typingGuard()) {
+          // A resting thumb never clicks: the button only goes down once it moves.
+          S.mode = 'armed'; S.armTravel = S.travel; flash('press');
+        }
+      }, LONG_MS);
+    }
+  }
+  S.maxF = Math.max(S.maxF, tl.length);
+  S.fp = S.fp || {};
+  for (const t of tl) if (!S.fp[t.identifier]) S.fp[t.identifier] = { x0: t.clientX, y0: t.clientY, x: t.clientX, y: t.clientY, tr: 0 };
+  if (tl.length > 1) clearTimeout(S.longTimer);
+  rebase(tl, now);
+  drawFingers(tl);
+}, { passive: false });
+
+pad.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (!S || S.ignore) return;
+  const now = performance.now(), tl = [...e.touches].filter((t) => !isPalm(t));
+  if (!tl.length) return;
+  if (tl.length !== S.n) { rebase(tl, now); return; }
+  // Resting thumb: of two fingers, one stays put while the other moves the cursor.
+  S.fp = S.fp || {};
+  for (const t of tl) {
+    const f = S.fp[t.identifier] || (S.fp[t.identifier] = { x0: t.clientX, y0: t.clientY, x: t.clientX, y: t.clientY });
+    f.dx = t.clientX - f.x; f.dy = t.clientY - f.y; f.x = t.clientX; f.y = t.clientY;
+    f.tr = Math.hypot(t.clientX - f.x0, t.clientY - f.y0);
+  }
+  if (cfg.palm && tl.length === 2 && S.maxF === 2 && (S.mode === 'none' || S.mode === 'rest')) {
+    const [a, b] = tl.map((t) => S.fp[t.identifier]);
+    const [still, mover] = a.tr < b.tr ? [a, b] : [b, a];
+    if (S.mode === 'rest' || (still.tr < 4 && mover.tr > 10)) {
+      S.mode = 'rest'; S.lastT = now;
+      moveCursor(mover.dx, mover.dy, 16); S.travel += Math.hypot(mover.dx, mover.dy);
+      drawFingers(tl); return;
+    }
+  }
+  const c = centroid(tl), dx = c.x - S.c.x, dy = c.y - S.c.y, dt = now - S.lastT;
+  S.c = c; S.lastT = now;
+  S.travel += Math.hypot(dx, dy);
+  const n = tl.length;
+
+  if (n === 1 && S.mode === 'armed' && S.travel - S.armTravel > 6) {
+    S.mode = 'holddrag'; S.held = true; setBtn(btnMask | 1);
+  }
+  if (n === 1) {
+    // Once a multi-finger gesture began, a leftover finger doesn't move the cursor.
+    if (S.maxF === 1 || S.held) moveCursor(dx, dy, dt);
+  } else if (n === 2) {
+    const d = spread(tl), dd = d - S.d; S.d = d;
+    if (S.mode === 'none' || S.mode === 'tapdrag' || S.mode === 'holddrag') {
+      const trs = tl.map((t) => S.fp[t.identifier].tr);
+    if (S.mode === 'rest') { /* handled above */ }
+    // Scroll/pinch only once BOTH fingers move (a still finger may be a resting thumb).
+    else if ((Math.min(...trs) > 4 && S.travel > 6) || Math.abs(dd) > 6 || !cfg.palm) S.mode = Math.abs(dd) > 2.2 * Math.hypot(dx, dy) && Math.abs(dd) > 4 ? 'pinch' : 'scroll';
+    }
+    if (S.mode === 'scroll') {
+      scrollBy(dy, dx);
+      S.vel.push({ t: now, vx: dx / Math.max(dt, 4), vy: dy / Math.max(dt, 4) });
+      if (S.vel.length > 6) S.vel.shift();
+    } else if (S.mode === 'pinch') {
+      if (!S.ctrl) { S.ctrl = true; send(new Uint8Array([M.KEYDOWN, 0xE0])); }
+      S.pinchAcc += dd;
+      const step = 28;
+      while (Math.abs(S.pinchAcc) >= step) {
+        const z = S.pinchAcc > 0 ? 1 : -1; S.pinchAcc -= z * step;
+        send(new Uint8Array([M.SCROLL, z & 255, 0]));   // Ctrl + wheel = zoom
+      }
+    }
+  } else if (n === 3) {
+    // Three-finger drag.
+    if (S.mode !== 'drag3' && S.travel > 8) { S.mode = 'drag3'; S.held = true; setBtn(btnMask | 1); }
+    if (S.mode === 'drag3') moveCursor(dx, dy, dt);
+  } else if (n >= 4) {
+    S.mode = 'swipe4'; S.swipe.x += dx; S.swipe.y += dy;
+  }
+  drawFingers(tl);
+}, { passive: false });
+
+function touchEnd(e) {
+  e.preventDefault();
+  if (!S) return;
+  const now = performance.now(), tl = [...e.touches].filter((t) => !isPalm(t));
+  if (S.ignore) { if (!e.touches.length) S = null; return; }
+  if (tl.length > 0) { rebase(tl, now); drawFingers(tl); return; }
+
+  clearTimeout(S.longTimer);
+  const dur = now - S.t0, still = S.travel < TAP_SLOP * S.maxF;
+  if (S.ctrl) send(new Uint8Array([M.KEYUP, 0xE0]));
+
+  if (S.held) {
+    setBtn(btnMask & ~1);
+    // Double-tap without moving = double click (the release above is the 2nd click).
+    lastTap.t = 0;
+  } else if (S.mode === 'swipe4') {
+    const { x, y } = S.swipe, ax = Math.abs(x), ay = Math.abs(y);
+    if (Math.max(ax, ay) > 70) {
+      if (ay > ax) {
+        if (y < 0) { send(new Uint8Array([M.TAP, 4, 0x2B])); label('APPS', C565.cyan); }        // Alt+Tab
+        else { send(new Uint8Array([M.CONSUMER, 0x23, 0x02])); label('HOME', C565.cyan); }      // AC Home
+      } else if (x > 0) { send(new Uint8Array([M.CONSUMER, 0x24, 0x02])); label('BACK', C565.cyan); }  // AC Back
+      else { send(new Uint8Array([M.CONSUMER, 0x25, 0x02])); label('FORWARD', C565.cyan); }             // AC Forward
+      flash('swiped');
+    }
+  } else if (dur < TAP_MS + 60 && still && S.mode !== 'rest' && S.mode !== 'armed') {
+    const b = S.maxF === 1 ? 1 : S.maxF === 2 ? 2 : 4;
+    click(b); flash('tapped');
+    if (S.maxF === 1) lastTap = { t: now, x: S.start.x, y: S.start.y };
+  } else if (S.mode === 'scroll') {
+    const recent = S.vel.filter((v) => now - v.t < 80);
+    if (recent.length) {
+      const vx = recent.reduce((a, v) => a + v.vx, 0) / recent.length;
+      const vy = recent.reduce((a, v) => a + v.vy, 0) / recent.length;
+      if (Math.hypot(vx, vy) > 0.25) startMomentum(vx, vy);
+    }
+  }
+  S = null; scrAccH = 0;
+  drawFingers([]);
+}
+pad.addEventListener('touchend', touchEnd, { passive: false });
+pad.addEventListener('touchcancel', touchEnd, { passive: false });
+
+function holdButton(el, bit) {
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); el.classList.add('down'); setBtn(btnMask | bit); });
+  const up = () => { el.classList.remove('down'); setBtn(btnMask & ~bit); };
+  el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('pointerleave', up);
+}
+holdButton($('bL'), 1); holdButton($('bR'), 2); holdButton($('bM'), 4);
+
+// ------------------------------------------------------------ fancy buttons
+const K = { CTRL: 1, SHIFT: 2, ALT: 4, GUI: 8 };
+const FX = [
+  ['媒體', [
+    ['⏯️', '播放', 'c1', { cons: 0xCD, lbl: 'PLAY' }], ['⏮️', '上一首', 'c1', { cons: 0xB6, lbl: 'PREV' }], ['⏭️', '下一首', 'c1', { cons: 0xB5, lbl: 'NEXT' }],
+    ['🔉', '音量－', 'c1', { cons: 0xEA, lbl: 'VOL-' }], ['🔊', '音量＋', 'c1', { cons: 0xE9, lbl: 'VOL+' }], ['🔇', '靜音', 'c1', { cons: 0xE2, lbl: 'MUTE' }],
+    ['🔅', '亮度－', 'c3', { cons: 0x70, lbl: 'DIM' }], ['🔆', '亮度＋', 'c3', { cons: 0x6F, lbl: 'BRIGHT' }], ['🔍', '搜尋', 'c3', { cons: 0x221, lbl: 'SEARCH' }],
+  ]],
+  ['系統', [
+    ['🏠', '主畫面', 'c2', { cons: 0x223, lbl: 'HOME' }], ['↩️', '返回', 'c2', { cons: 0x224, lbl: 'BACK' }], ['🗂️', '切換 App', 'c2', { tap: [K.ALT, 0x2B], lbl: 'ALT+TAB' }],
+    ['📸', '截圖', 'c2', { tap: [0, 0x46], lbl: 'SNAP!' }], ['🔔', '通知', 'c2', { tap: [K.GUI, 0x11], lbl: 'NOTIFY' }], ['🌐', '切換輸入法', 'c2', { tap: [K.SHIFT, 0x2C], lbl: 'IME' }],
+  ]],
+  ['編輯', [
+    ['📋', '複製', 'c4', { tap: [K.CTRL, 0x06], lbl: 'COPY' }], ['📥', '貼上', 'c4', { tap: [K.CTRL, 0x19], lbl: 'PASTE' }], ['✂️', '剪下', 'c4', { tap: [K.CTRL, 0x1B], lbl: 'CUT' }],
+    ['🔲', '全選', 'c4', { tap: [K.CTRL, 0x04], lbl: 'ALL' }], ['↶', '復原', 'c4', { tap: [K.CTRL, 0x1D], lbl: 'UNDO' }], ['↷', '重做', 'c4', { tap: [K.CTRL | K.SHIFT, 0x1D], lbl: 'REDO' }],
+  ]],
+  ['炫砲特效', [
+    ['🌈', '彩虹', 'c2', { fx: 1 }], ['⚡', '閃光', 'c3', { fx: 2 }], ['🚨', '警報', 'c2', { fx: 3 }],
+    ['🔥', '火焰', 'c3', { fx: 4 }], ['💻', '駭客', 'c4', { fx: 5 }], ['🎉', '全部來', 'c1', { party: true }],
+  ]],
+];
+const glow = { c1: '#00f0ff', c2: '#ff2bd6', c3: '#ffe600', c4: '#39ff88' };
+
+function burst(el, e) {
+  el.classList.remove('hot'); void el.offsetWidth; el.classList.add('hot');
+  const r = el.getBoundingClientRect(), d = document.createElement('div');
+  d.className = 'ripple'; d.style.left = (e.clientX - r.left) + 'px'; d.style.top = (e.clientY - r.top) + 'px';
+  el.appendChild(d); setTimeout(() => d.remove(), 600);
+}
+
+function act(a) {
+  if (a.cons) { send(new Uint8Array([M.CONSUMER, a.cons & 255, a.cons >> 8])); }
+  if (a.tap) send(new Uint8Array([M.TAP, a.tap[0], a.tap[1]]));
+  if (a.fx) send(new Uint8Array([M.FX, a.fx]));
+  if (a.text) sendText(a.text);
+  if (a.party) { [1, 3, 4, 5, 2].forEach((f, i) => setTimeout(() => send(new Uint8Array([M.FX, f])), i * 1200)); }
+  if (a.lbl) label(a.lbl, a.color || C565.cyan);
+}
+
+function sections() {
+  return FX.concat([['自訂巨集（長按編輯）', macros().map((m, i) => [m.icon || '⭐', m.name, 'c3 mac', { text: m.text, lbl: 'MACRO ' + (i + 1), color: C565.yellow, idx: i }])]]);
+}
+function fxButton([icon, name, cls, a], base) {
+  const b = document.createElement('button'); b.className = base + ' ' + cls;
+  b.style.setProperty('--glow', glow[cls.split(' ')[0]]);
+  b.innerHTML = `<span>${icon}</span><small></small>`;
+  b.querySelector('small').textContent = name;
+  let sx = 0, sy = 0, longT = null;
+  b.addEventListener('mousedown', (e) => e.preventDefault());
+  b.addEventListener('pointerdown', (e) => {
+    sx = e.clientX; sy = e.clientY;
+    if (a.idx !== undefined) longT = setTimeout(() => { longT = 'fired'; editMacro(a.idx); }, 650);
+  });
+  b.addEventListener('pointerup', (e) => {
+    if (longT === 'fired') { longT = null; return; }
+    clearTimeout(longT); longT = null;
+    if (Math.abs(e.clientX - sx) + Math.abs(e.clientY - sy) > 12) return;  // was a scroll, not a tap
+    burst(b, e); act(a);
+  });
+  b.addEventListener('pointercancel', () => { clearTimeout(longT); longT = null; });
+  return b;
+}
+function renderFx() {
+  const box = $('fx'); box.innerHTML = '';
+  for (const [title, items] of sections()) {
+    const h = document.createElement('h3'); h.textContent = title; box.appendChild(h);
+    const g = document.createElement('div'); g.className = 'grid';
+    for (const it of items) g.appendChild(fxButton(it, 'fb'));
+    box.appendChild(g);
+  }
+  renderTouchBar();
+}
+let fnMode = false, fnKeys = null, escKey = null;
+function renderTouchBar() {
+  const tb = $('tbScroll'); tb.innerHTML = '';
+  if (!escKey) {
+    escKey = makeKey(['esc', 0, 0x29, '']);
+    fnKeys = [...Array(12)].map((_, i) => makeKey(['F' + (i + 1), 0, 0x3A + i, '']));
+    $('touchbar').insertBefore(escKey, tb);
+  }
+  if (fnMode) { fnKeys.forEach((k) => tb.appendChild(k)); return; }
+  if (zyMode) {
+    // Zhuyin: candidate controls first, like the Mac Touch Bar while typing Chinese.
+    [['◀', '上一個字', 'c2', { tap: [0, 0x50], lbl: '<' }], ['▶', '下一個字', 'c2', { tap: [0, 0x4F], lbl: '>' }],
+     ['▼', '更多候選', 'c2', { tap: [0, 0x51], lbl: 'MORE' }], ['✓', '選定', 'c4', { tap: [0, 0x28], lbl: 'OK' }],
+     ['✕', '取消', 'c3', { tap: [0, 0x29], lbl: 'ESC' }]].forEach((it) => tb.appendChild(fxButton(it, 'tb cand')));
+    const sep = document.createElement('div'); sep.className = 'tb-sep'; tb.appendChild(sep);
+  }
+  sections().forEach(([, items], i) => {
+    if (i) { const sep = document.createElement('div'); sep.className = 'tb-sep'; tb.appendChild(sep); }
+    for (const it of items) tb.appendChild(fxButton(it, 'tb'));
+  });
+}
+function setZy(on, quiet) {
+  zyMode = on; localStorage.padkeyZy = on ? '1' : '';
+  document.body.classList.toggle('zy', on);
+  ['tbZy', 'stripZy'].forEach((id) => $(id) && $(id).classList.toggle('on', on));
+  if (on && document.activeElement === sys) sys.blur();
+  refreshKeys();
+  if (typeof renderTouchBar === 'function' && escKey) renderTouchBar();
+  if (!quiet && on && !setZy.init) toast('注音模式：用 🌐 鍵或「注」按鈕切換，會同時切換三星平板的輸入法', 3500);
+  setZy.init = false;
+}
+$('tbZy').addEventListener('mousedown', (e) => e.preventDefault());
+$('tbZy').onclick = () => switchIme();
+$('tbFn').addEventListener('mousedown', (e) => e.preventDefault());
+$('tbFn').onclick = () => { fnMode = !fnMode; $('tbFn').classList.toggle('on', fnMode); renderTouchBar(); };
+
+function macros() {
+  const def = [{ name: '打招呼', text: 'Hello from PadKey!' }, { name: 'Email', text: '' }, { name: '巨集 3', text: '' },
+    { name: '巨集 4', text: '' }, { name: '巨集 5', text: '' }, { name: '巨集 6', text: '' }];
+  return JSON.parse(localStorage.padkeyMacros || 'null') || def;
+}
+function editMacro(i) {
+  const list = macros();
+  const name = prompt('按鈕名稱：', list[i].name); if (name === null) return;
+  const text = prompt('按下時要打出的文字（只支援英數符號）：', list[i].text); if (text === null) return;
+  list[i] = { name, text }; localStorage.padkeyMacros = JSON.stringify(list); renderFx();
+}
+// ------------------------------------------------------------ keyboard
+// [label, shiftedLabel, usage, classes]
+const R = (s, base) => s.split('').map((c, i) => [c, null, base + i]);
+const LAYOUT = [
+  [['esc', 0, 0x29, 'fn'], ...[...Array(12)].map((_, i) => ['F' + (i + 1), 0, 0x3A + i, 'fn']), ['del', 0, 0x4C, 'fn']],
+  [['`', '~', 0x35], ['1', '!', 0x1E], ['2', '@', 0x1F], ['3', '#', 0x20], ['4', '$', 0x21], ['5', '%', 0x22], ['6', '^', 0x23], ['7', '&', 0x24],
+    ['8', '*', 0x25], ['9', '(', 0x26], ['0', ')', 0x27], ['-', '_', 0x2D], ['=', '+', 0x2E], ['⌫', 0, 0x2A, 'mod w15']],
+  [['tab', 0, 0x2B, 'mod w15'], ...'qwertyuiop'.split('').map((c) => [c, c.toUpperCase(), 0x04 + c.charCodeAt(0) - 97]),
+    ['[', '{', 0x2F], [']', '}', 0x30], ['\\', '|', 0x31]],
+  [['caps', 0, 0x39, 'mod w175'], ...'asdfghjkl'.split('').map((c) => [c, c.toUpperCase(), 0x04 + c.charCodeAt(0) - 97]),
+    [';', ':', 0x33], ["'", '"', 0x34], ['enter', 0, 0x28, 'mod w2']],
+  [['shift', 0, 0xE1, 'mod w2 m'], ...'zxcvbnm'.split('').map((c) => [c, c.toUpperCase(), 0x04 + c.charCodeAt(0) - 97]),
+    [',', '<', 0x36], ['.', '>', 0x37], ['/', '?', 0x38], ['shift', 0, 0xE5, 'mod w2 m']],
+  [['🌐', 0, 0, 'globe'], ['ctrl', 0, 0xE0, 'mod m'], ['⌘', 0, 0xE3, 'mod m'], ['alt', 0, 0xE2, 'mod m'], ['', 0, 0x2C, 'w6'], ['alt', 0, 0xE6, 'mod m'],
+    ['←', 0, 0x50, 'mod'], ['↑', 0, 0x52, 'mod'], ['↓', 0, 0x51, 'mod'], ['→', 0, 0x4F, 'mod']],
+];
+const sys = $('sysin');
+const ZY = {
+  0x1E: 'ㄅ', 0x1F: 'ㄉ', 0x20: 'ˇ', 0x21: 'ˋ', 0x22: 'ㄓ', 0x23: 'ˊ', 0x24: '˙', 0x25: 'ㄚ', 0x26: 'ㄞ', 0x27: 'ㄢ', 0x2D: 'ㄦ',
+  0x14: 'ㄆ', 0x1A: 'ㄊ', 0x08: 'ㄍ', 0x15: 'ㄐ', 0x17: 'ㄔ', 0x1C: 'ㄗ', 0x18: 'ㄧ', 0x0C: 'ㄛ', 0x12: 'ㄟ', 0x13: 'ㄣ',
+  0x04: 'ㄇ', 0x16: 'ㄋ', 0x07: 'ㄎ', 0x09: 'ㄑ', 0x0A: 'ㄕ', 0x0B: 'ㄘ', 0x0D: 'ㄨ', 0x0E: 'ㄜ', 0x0F: 'ㄠ', 0x33: 'ㄤ',
+  0x1D: 'ㄈ', 0x1B: 'ㄌ', 0x06: 'ㄏ', 0x19: 'ㄒ', 0x05: 'ㄖ', 0x11: 'ㄙ', 0x10: 'ㄩ', 0x36: 'ㄝ', 0x37: 'ㄡ', 0x38: 'ㄥ',
+};
+let zyMode = localStorage.padkeyZy === '1', hostCaps = false;
+const latched = new Map();   // usage -> 'latched' | 'locked'
+const keyEls = [];
+const modBit = (u) => 1 << (u - 0xE0);
+const MOD_LABEL = { 0xE0: 'CTRL', 0xE1: 'SHIFT', 0xE2: 'ALT', 0xE3: 'META', 0xE4: 'CTRL', 0xE5: 'SHIFT', 0xE6: 'ALT', 0xE7: 'META' };
+
+function refreshKeys() {
+  const shift = latched.has(0xE1) || latched.has(0xE5);
+  for (const { el, def } of keyEls) {
+    const [lab, sh, u] = def;
+    const letter = /^[a-z]$/.test(lab);
+    if (zyMode && ZY[u] && !shift) el.innerHTML = `<b>${ZY[u]}</b><i>${lab}</i>`;
+    else if (sh) el.textContent = (shift !== (letter && hostCaps)) ? sh : lab;
+    el.classList.toggle('capson', u === 0x39 && hostCaps);
+    el.classList.toggle('latched', latched.has(u));
+    el.classList.toggle('locked', latched.get(u) === 'locked');
+  }
+}
+
+// Palm rejection ("rest your hands" mode): a key fires when a SHORT tap is
+// released. Fingers/palms resting on the glass never type. Backspace and the
+// arrows still auto-repeat when held, but only if nothing else is touching.
+const REPEAT = new Set([0x2A, 0x4C, 0x4F, 0x50, 0x51, 0x52]);
+let kbdTouches = 0, lastKeyAt = 0;
+const TAP_MAX_MS = 320, KEY_SLOP = 22;
+
+function fireKey(u, lab, mods) {
+  mods.forEach((m) => send(new Uint8Array([M.KEYDOWN, m])));
+  send(new Uint8Array([M.KEYDOWN, u]));
+  send(new Uint8Array([M.KEYUP, u]));
+  mods.forEach((m) => send(new Uint8Array([M.KEYUP, m])));
+  keyLabel(lab, mods);
+}
+function keyLabel(lab, mods) {
+  const name = (mods.map((m) => MOD_LABEL[m]).join('+') + (mods.length ? '+' : '') + (lab || 'SPACE').toUpperCase());
+  label(name.length > 14 ? (lab || 'SPACE').toUpperCase() : name, C565.pink);
+  lastKeyAt = performance.now();
+}
+function toggleMod(u) {
+  const st = latched.get(u);
+  if (!st) latched.set(u, 'latched');
+  else if (st === 'latched') latched.set(u, 'locked');
+  else latched.delete(u);
+  refreshKeys();
+}
+
+function makeKey(def) {
+  const [lab, , u, cls = ''] = def;
+  const el = document.createElement('button'); el.className = 'k ' + cls; el.textContent = lab;
+  keyEls.push({ el, def });
+  const isMod = cls.includes(' m') || cls.endsWith('m');
+  const isGlobe = cls.includes('globe');
+  el.addEventListener('mousedown', (e) => e.preventDefault());  // keep iOS keyboard open
+  el.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); el.setPointerCapture(e.pointerId);
+    kbdTouches++;
+    el._t0 = performance.now(); el._x = e.clientX; el._y = e.clientY; el._dead = false; el._held = false;
+    // Very large contact = palm.
+    if (cfg.palm && (e.width > 50 || e.height > 50)) { el._dead = true; return; }
+    el.classList.add('down');
+    if (isGlobe) { el._longT = setTimeout(() => { el._dead = true; setZy(!zyMode); toast('只切換 App 上的注音標示（不送快捷鍵）'); }, 650); return; }
+    if (!cfg.palm) {  // classic: act on press
+      if (isMod) { toggleMod(u); return; }
+      el._mods = [...latched.keys()];
+      el._mods.forEach((m) => send(new Uint8Array([M.KEYDOWN, m])));
+      send(new Uint8Array([M.KEYDOWN, u])); el._held = true;
+      keyLabel(lab, el._mods);
+      return;
+    }
+    if (REPEAT.has(u)) {
+      el._repT = setTimeout(() => {
+        if (el._dead || kbdTouches !== 1) return;
+        el._mods = [...latched.keys()];
+        el._mods.forEach((m) => send(new Uint8Array([M.KEYDOWN, m])));
+        send(new Uint8Array([M.KEYDOWN, u])); el._held = true;
+        keyLabel(lab, el._mods);
+      }, 380);
+    }
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (cfg.palm && !el._dead && Math.hypot(e.clientX - el._x, e.clientY - el._y) > KEY_SLOP && !el._held) {
+      el._dead = true; el.classList.remove('down');     // slid off: a resting/rolling finger
+    }
+  });
+  const up = (e) => {
+    kbdTouches = Math.max(0, kbdTouches - 1);
+    clearTimeout(el._repT); clearTimeout(el._longT);
+    const wasDown = el.classList.contains('down');
+    el.classList.remove('down');
+    if (el._held) {
+      send(new Uint8Array([M.KEYUP, u]));
+      (el._mods || []).forEach((m) => send(new Uint8Array([M.KEYUP, m])));
+      el._held = false; clearLatched(); return;
+    }
+    if (!wasDown || el._dead || e.type === 'pointercancel') return;
+    if (cfg.palm && performance.now() - el._t0 > TAP_MAX_MS) return;   // rested, not tapped
+    if (isGlobe) { switchIme(); return; }
+    if (isMod) { if (cfg.palm) toggleMod(u); return; }
+    fireKey(u, lab, [...latched.keys()]);
+    clearLatched();
+  };
+  el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  return el;
+}
+
+// 🌐: switch the tablet's input method AND the on-screen Zhuyin labels together.
+const IME_KEYS = { ctrl: [1, 0x2C], shift: [2, 0x2C], altshift: [4, 0xE1], none: null };
+function switchIme() {
+  const k = IME_KEYS[cfg.ime];
+  if (k) {
+    if (k[1] === 0xE1) { send(new Uint8Array([M.KEYDOWN, 0xE2])); send(new Uint8Array([M.KEYDOWN, 0xE1])); send(new Uint8Array([M.KEYUP, 0xE1])); send(new Uint8Array([M.KEYUP, 0xE2])); }
+    else send(new Uint8Array([M.TAP, k[0], k[1]]));
+  }
+  setZy(!zyMode, true);
+  label(zyMode ? 'ZHUYIN' : 'ENGLISH', C565.yellow);
+}
+function clearLatched() {
+  for (const [m, st] of [...latched]) if (st === 'latched') latched.delete(m);
+  refreshKeys();
+}
+
+function buildKbd() {
+  const kb = $('kbd');
+  LAYOUT.forEach((row, ri) => {
+    const r = document.createElement('div'); r.className = 'row' + (ri === 0 ? ' fnrow' : '');
+    for (const def of row) r.appendChild(makeKey(def));
+    kb.appendChild(r);
+  });
+  // Phone: one scrollable strip of special keys; letters come from the iOS keyboard.
+  const strip = $('strip');
+  const tog = document.createElement('button'); tog.className = 'k'; tog.textContent = '⌨️';
+  tog.addEventListener('mousedown', (e) => e.preventDefault());
+  tog.onclick = () => { if (document.activeElement === sys) sys.blur(); else { sys.value = ''; sys.focus(); } };
+  strip.appendChild(tog);
+  const zy = document.createElement('button'); zy.id = 'stripZy'; zy.textContent = '注';
+  zy.addEventListener('mousedown', (e) => e.preventDefault());
+  zy.onclick = () => switchIme();
+  strip.appendChild(zy);
+  [['esc', 0, 0x29], ['tab', 0, 0x2B], ['ctrl', 0, 0xE0, 'mod m'], ['alt', 0, 0xE2, 'mod m'], ['⌘', 0, 0xE3, 'mod m'], ['shift', 0, 0xE1, 'mod m'],
+    ['←', 0, 0x50], ['↑', 0, 0x52], ['↓', 0, 0x51], ['→', 0, 0x4F], ['⌫', 0, 0x2A], ['enter', 0, 0x28], ['del', 0, 0x4C],
+    ['home', 0, 0x4A], ['end', 0, 0x4D], ['pgup', 0, 0x4B], ['pgdn', 0, 0x4E], ['prtsc', 0, 0x46],
+    ...[...Array(12)].map((_, i) => ['F' + (i + 1), 0, 0x3A + i])].forEach((d) => strip.appendChild(makeKey(d)));
+}
+buildKbd();
+renderFx();
+setZy.init = true; setZy(zyMode, true);
+
+function setKbd(on) {
+  document.body.classList.toggle('nokbd', !on);
+  $('bKbd').classList.toggle('on', on);
+  localStorage.padkeyKbd = on ? '1' : '0';
+}
+$('bKbd').onclick = () => setKbd(document.body.classList.contains('nokbd'));
+setKbd(localStorage.padkeyKbd !== '0');
+
+// ------------------------------------------------------------ iPad system keyboard
+$('bSys').onclick = () => { if (document.activeElement === sys) sys.blur(); else { sys.value = ''; sys.focus(); } };
+sys.addEventListener('focus', () => $('bSys').classList.add('on'));
+sys.addEventListener('blur', () => $('bSys').classList.remove('on'));
+sys.addEventListener('beforeinput', (e) => {
+  e.preventDefault();
+  const t = e.inputType;
+  if (t === 'deleteContentBackward') send(new Uint8Array([M.TAP, 0, 0x2A]));
+  else if (t === 'deleteContentForward') send(new Uint8Array([M.TAP, 0, 0x4C]));
+  else if (t === 'insertLineBreak' || t === 'insertParagraph') send(new Uint8Array([M.TAP, 0, 0x28]));
+  else if (e.data && latched.size && e.data.length === 1 && charUsage(e.data)) {
+    const [u, sh] = charUsage(e.data);
+    let mods = 0; for (const m of latched.keys()) mods |= modBit(m);
+    if (sh) mods |= K.SHIFT;
+    send(new Uint8Array([M.TAP, mods, u]));
+    label([...latched.keys()].map((m) => MOD_LABEL[m]).join('+') + '+' + e.data.toUpperCase(), C565.pink);
+    clearLatched();
+  }
+  else if (e.data) {
+    if (/[^\x00-\x7f]/.test(e.data)) toast('中文/表情符號無法透過 USB 鍵盤傳送，請在三星平板上切換輸入法打字');
+    sendText(e.data.replace(/[^\x00-\x7f]/g, ''));
+  }
+});
+function charUsage(c) {
+  const lower = 'abcdefghijklmnopqrstuvwxyz', digits = '1234567890';
+  const plain = { ' ': 0x2C, '-': 0x2D, '=': 0x2E, '[': 0x2F, ']': 0x30, '\\': 0x31, ';': 0x33, "'": 0x34, '`': 0x35, ',': 0x36, '.': 0x37, '/': 0x38 };
+  const shifted = { '_': 0x2D, '+': 0x2E, '{': 0x2F, '}': 0x30, '|': 0x31, ':': 0x33, '"': 0x34, '~': 0x35, '<': 0x36, '>': 0x37, '?': 0x38,
+    '!': 0x1E, '@': 0x1F, '#': 0x20, '$': 0x21, '%': 0x22, '^': 0x23, '&': 0x24, '*': 0x25, '(': 0x26, ')': 0x27 };
+  if (lower.includes(c)) return [0x04 + lower.indexOf(c), false];
+  if (lower.toUpperCase().includes(c)) return [0x04 + lower.toUpperCase().indexOf(c), true];
+  if (digits.includes(c)) return [0x1E + digits.indexOf(c), false];
+  if (c in plain) return [plain[c], false];
+  if (c in shifted) return [shifted[c], true];
+  return null;
+}
+// Hardware/smart keyboard attached to the iPad: forward arrows, esc, etc.
+sys.addEventListener('keydown', (e) => {
+  const map = { ArrowLeft: 0x50, ArrowRight: 0x4F, ArrowUp: 0x52, ArrowDown: 0x51, Escape: 0x29, Tab: 0x2B };
+  if (map[e.key]) { e.preventDefault(); send(new Uint8Array([M.TAP, (e.ctrlKey ? 1 : 0) | (e.shiftKey ? 2 : 0) | (e.altKey ? 4 : 0) | (e.metaKey ? 8 : 0), map[e.key]])); }
+});
+
+// ------------------------------------------------------------ settings UI
+function bindRange(id, key) {
+  const el = $(id); el.value = cfg[key];
+  el.oninput = () => { cfg[key] = parseFloat(el.value); saveCfg(); };
+}
+bindRange('sSpeed', 'speed'); bindRange('sAccel', 'accel'); bindRange('sScroll', 'scroll');
+$('sPalm').checked = cfg.palm; $('sPalm').onchange = () => { cfg.palm = $('sPalm').checked; saveCfg(); };
+$('sIme').value = cfg.ime; $('sIme').onchange = () => { cfg.ime = $('sIme').value; saveCfg(); };
+$('sNatural').checked = cfg.natural; $('sNatural').onchange = () => { cfg.natural = $('sNatural').checked; saveCfg(); };
+$('bSet').onclick = () => {
+  $('settings').classList.add('show');
+  $('apNow').textContent = info.ap ? `名稱：${info.apSsid}　密碼：${info.apPass}　網址：http://192.168.4.1` : '目前連著家用 Wi‑Fi，熱點已關閉。';
+  $('wifiNow').textContent = info.home ? `已設定：${info.home}${info.ap ? '（連不上，所以開著熱點）' : `（${info.ip}）`}` : '沒設定：T-Dongle 只用熱點（推薦，延遲最低也最穩）。';
+  $('bForget').style.display = info.home ? 'block' : 'none';
+  $('fwInfo').textContent = `韌體 ${info.fw || '?'}`;
+};
+$('bClose').onclick = () => $('settings').classList.remove('show');
+$('bScan').onclick = async () => {
+  $('nets').innerHTML = '<p>掃描中…</p>';
+  for (let i = 0; i < 8; i++) {
+    const r = await fetch('/api/scan?t=' + token); const list = await r.json();
+    if (r.status === 200 && list.length) {
+      const seen = new Set();
+      $('nets').innerHTML = '';
+      list.sort((a, b) => b.rssi - a.rssi).forEach((n) => {
+        if (!n.ssid || seen.has(n.ssid)) return; seen.add(n.ssid);
+        const b = document.createElement('button');
+        b.innerHTML = `<span></span><span>${n.open ? '' : '🔒'} ${n.rssi > -60 ? '▂▄▆█' : n.rssi > -75 ? '▂▄▆' : '▂▄'}</span>`;
+        b.firstChild.textContent = n.ssid;
+        b.onclick = () => { $('wSsid').value = n.ssid; $('wPass').focus(); };
+        $('nets').appendChild(b);
+      });
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  $('nets').innerHTML = '<p>找不到網路，再試一次</p>';
+};
+$('bWifi').onclick = async () => {
+  if (!$('wSsid').value) return toast('請輸入 Wi‑Fi 名稱');
+  await fetch('/api/wifi?t=' + token, { method: 'POST', body: new URLSearchParams({ ssid: $('wSsid').value, pass: $('wPass').value }) });
+  toast('已儲存！T-Dongle 重新啟動中，請讓 iPad 連到同一個 Wi‑Fi，再開 http://padkey.local', 8000);
+};
+$('bApPass').onclick = async () => {
+  const v = $('apPassIn').value;
+  if (v.length < 8 || v.length > 63) return toast('密碼要 8～63 個字');
+  const r = await fetch('/api/appass?t=' + token, { method: 'POST', body: new URLSearchParams({ pass: v }) });
+  toast(r.ok ? '已儲存！T-Dongle 重新啟動中，請用新密碼重新連熱點' : '儲存失敗', 8000);
+};
+$('bForget').onclick = async () => {
+  if (!confirm('不再連家用 Wi‑Fi，只用熱點？')) return;
+  await fetch('/api/wififorget?t=' + token, { method: 'POST' });
+  toast('T-Dongle 重新啟動中，請連它的熱點，再開 http://192.168.4.1', 8000);
+};
+$('bUnpair').onclick = () => {
+  if (!confirm('確定要取消配對嗎？')) return;
+  localStorage.removeItem('padkeyToken'); token = ''; authed = false; if (ws) ws.close(); $('settings').classList.remove('show'); showPair();
+};
+
+// Safety: never leave keys stuck when the app goes to the background.
+document.addEventListener('visibilitychange', () => { if (document.hidden) send(new Uint8Array([M.RELEASE])); });
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+document.addEventListener('touchmove', (e) => { if (!e.target.closest('#fx, .card, #strip, #touchbar')) e.preventDefault(); }, { passive: false });
+
+const isPhone = Math.min(screen.width, screen.height) < 600;
+function setTab(t) {
+  document.body.dataset.tab = t;
+  document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === t));
+  localStorage.padkeyTab = t;
+}
+function orient() { document.body.classList.toggle('land', innerWidth > innerHeight); }
+if (isPhone) {
+  document.body.classList.add('phone');
+  orient(); addEventListener('resize', orient);
+  setTab(localStorage.padkeyTab || 'pad');
+  document.querySelectorAll('#tabs button').forEach((b) => b.addEventListener('click', () => {
+    setTab(b.dataset.t);
+    // Opening the keyboard tab in portrait pops up the iPhone keyboard right away.
+    if (b.dataset.t === 'kbd' && !document.body.classList.contains('land') && !zyMode) { sys.value = ''; sys.focus(); }
+    else sys.blur();
+  }));
+}
+function fitViewport() {
+  const h = window.visualViewport ? visualViewport.height : innerHeight;
+  document.body.style.height = h + 'px';
+  window.scrollTo(0, 0);
+}
+if (window.visualViewport) { visualViewport.addEventListener('resize', fitViewport); visualViewport.addEventListener('scroll', fitViewport); }
+addEventListener('resize', fitViewport); fitViewport();
+
+$('bBle').onclick = async () => {
+  $('bleErr').textContent = '';
+  if (!navigator.bluetooth) { $('bleErr').textContent = '這個瀏覽器不支援藍牙，請用 Bluefy 開啟'; return; }
+  try {
+    bleDev = await navigator.bluetooth.requestDevice({ filters: [{ services: [BLE_SVC] }] });
+    bleDev.addEventListener('gattserverdisconnected', () => { authed = false; bleCmd = null; setPill(false); setTimeout(bleConnect, 1000); });
+    bleConnect();
+  } catch (e) { $('bleErr').textContent = e.message; }
+};
+if (mode === 'ble') $('wifiSec').style.display = 'none';
+
+connect();
+</script>
+</body>
+</html>
