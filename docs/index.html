@@ -139,6 +139,7 @@ hr { border: none; border-top: 1px solid var(--keyb); margin: 18px 0; }
 body.phone header { height: 44px; padding: 4px 10px; gap: 6px; }
 body.phone .logo { font-size: 18px; letter-spacing: 2px; }
 body.phone #bKbd, body.phone #bSys { display: none; }
+body.phone header .pill#usb { display: none; }
 body.phone #tabs { display: flex; }
 body.phone main { flex-direction: column; padding: 0 8px 4px; }
 body.phone #fx { width: auto; height: auto; flex: 1; }
@@ -213,6 +214,40 @@ body.phone.land .nrow { margin-bottom: 5px; }
 body.phone.land .nk .fl { display: none; }
 body.phone.land #tabs button { height: 40px; flex-direction: row; gap: 6px; }
 
+/* ---------- 中文送字 ---------- */
+#compose { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  background: #1f1f21; border-top: 1px solid rgba(0,240,255,.35); }
+#compose.show { display: block; }
+#ctext { width: 100%; font-size: 20px; border-radius: 10px; border: 1px solid var(--keyb); background: #2c2c2e; color: #fff; padding: 8px 10px;
+  -webkit-user-select: text; user-select: text; resize: none; }
+.crow { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 14px; color: var(--dim); }
+#cStatus { color: var(--green); }
+body.composing #kbd { display: none !important; }
+/* ---------- 描圖 ---------- */
+#bTrace.new::after { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--pink); margin-left: 6px; box-shadow: 0 0 8px var(--pink); }
+#bTrace.busy::after { content: attr(data-pct); font-size: 11px; margin-left: 6px; color: var(--cyan); }
+#trace { display: none; position: fixed; inset: 0; z-index: 9; background: #111; flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+#trace.show { display: flex; }
+.tbar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #1c1c1e; flex-wrap: wrap; }
+.tbar input[type=range] { width: 110px; accent-color: var(--cyan); }
+.tl { font-size: 13px; color: #aaa; display: flex; align-items: center; gap: 4px; }
+.sw { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #444; }
+.sw.on { border-color: #fff; box-shadow: 0 0 8px rgba(255,255,255,.6); }
+#trace .hbtn.on { border-color: var(--cyan); color: var(--cyan); }
+#tArea { flex: 1; position: relative; overflow: hidden; touch-action: none; background: #2a2a2c; }
+#tStage { position: absolute; left: 0; top: 0; transform-origin: 0 0; background: #fff; box-shadow: 0 0 30px rgba(0,0,0,.6); }
+#tRef { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .5; pointer-events: none; }
+#tRef:not([src]) { display: none; }
+#tInk { position: absolute; left: 0; top: 0; pointer-events: none; }
+.tempty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; color: #777; line-height: 1.8; pointer-events: none; }
+#tStage:has(#tRef[src]) + .tempty { display: none; }
+#tSaveBox { display: none; position: absolute; inset: 0; background: rgba(0,0,0,.8); align-items: center; justify-content: center; z-index: 2; }
+#tSaveBox.show { display: flex; }
+#tSaveBox > div { background: #1c1c1e; padding: 14px; border-radius: 14px; text-align: center; max-width: 90vw; }
+#tSaveBox img { max-width: 80vw; max-height: 70vh; -webkit-touch-callout: default; -webkit-user-select: auto; user-select: auto; }
+body.phone #bZh, body.phone #bTrace { padding: 0 8px; font-size: 13px; }
+
 @media (orientation: portrait) {
   main { flex-direction: column; }
   #fx { width: auto; height: 34%; flex: none; }
@@ -227,7 +262,9 @@ body.phone.land #tabs button { height: 40px; flex-direction: row; gap: 6px; }
   <span id="st" class="pill bad">未連線</span>
   <span id="usb" class="pill">USB</span>
   <div class="spacer"></div>
-  <button class="hbtn" id="bSys">🍎 iPad 鍵盤</button>
+  <button class="hbtn" id="bZh">✍️ 中文</button>
+  <button class="hbtn" id="bTrace">🎨 描圖</button>
+  <button class="hbtn" id="bSys" style="display:none">🍎 iPad 鍵盤</button>
   <button class="hbtn" id="bKbd">⌨️ 鍵盤</button>
   <button class="hbtn" id="bSet">⚙️</button>
 </header>
@@ -302,6 +339,37 @@ body.phone.land #tabs button { height: 40px; flex-direction: row; gap: 6px; }
   <div class="err" id="bleErr"></div>
 </div></div>
 
+<div id="compose">
+  <textarea id="ctext" rows="2" placeholder="用 iPad 的注音鍵盤打字，按「送出」貼到三星平板" autocomplete="off" spellcheck="false"></textarea>
+  <div class="crow">
+    <label><input type="checkbox" id="cEnter"> Return 直接送出</label>
+    <span id="cStatus"></span>
+    <span class="spacer"></span>
+    <button class="hbtn" id="cClose">收起</button>
+    <button class="hbtn on" id="cSend">送出 ⏎</button>
+  </div>
+</div>
+
+<div id="trace">
+  <div class="tbar">
+    <button class="hbtn" id="tClose">✕</button>
+    <span class="tl">原圖</span><input type="range" id="tOpacity" min="0" max="1" step="0.05" value="0.5">
+    <span class="tl">粗細</span><input type="range" id="tSize" min="1" max="20" step="1" value="4">
+    <button class="sw on" data-c="#ff2bd6" style="background:#ff2bd6"></button><button class="sw" data-c="#111111" style="background:#111"></button>
+    <button class="sw" data-c="#0a84ff" style="background:#0a84ff"></button><button class="sw" data-c="#ff3b30" style="background:#ff3b30"></button>
+    <button class="hbtn" id="tErase">橡皮擦</button>
+    <button class="hbtn" id="tUndo">↶</button>
+    <button class="hbtn" id="tClear">🗑</button>
+    <button class="hbtn" id="tFit">⤢</button>
+    <button class="hbtn" id="tPrev">上一張</button>
+    <label class="tl"><input type="checkbox" id="tPencil" checked> 手指只移動</label>
+    <button class="hbtn" id="tSave">💾</button>
+  </div>
+  <div id="tArea"><div id="tStage"><img id="tRef" alt=""><canvas id="tInk"></canvas></div>
+    <div class="tempty">在三星平板用 S Pen「智慧型選取」框一塊區域（或截圖），<br>圖片就會傳到這裡。</div></div>
+  <div id="tSaveBox"><div><p>長按圖片 → 儲存影像</p><label class="tl"><input type="checkbox" id="tSaveRef"> 包含原圖</label><img id="tSaved" alt=""></div></div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -318,7 +386,7 @@ function toast(msg, ms = 2200) {
 }
 
 // ------------------------------------------------------------ connection
-const M = { MOVE: 1, BTN: 2, SCROLL: 3, KEYDOWN: 4, KEYUP: 5, TAP: 6, TEXT: 7, CONSUMER: 8, RELEASE: 9, FX: 10, LABEL: 11 };
+const M = { MOVE: 1, BTN: 2, SCROLL: 3, KEYDOWN: 4, KEYUP: 5, TAP: 6, TEXT: 7, CONSUMER: 8, RELEASE: 9, FX: 10, LABEL: 11, UTEXT: 12 };
 const enc = new TextEncoder();
 // Two transports, same messages:
 //  * Wi-Fi WebSocket when the page is served by the dongle (Safari, hotspot)
@@ -336,6 +404,9 @@ function onServerText(s) {
   else if (s.startsWith('st ')) status(JSON.parse(s.slice(3)));
   else if (s.startsWith('token ') && pairWaiter) { pairWaiter(s.slice(6)); pairWaiter = null; }
   else if (s === 'badpin' && pairWaiter) { pairWaiter(null); pairWaiter = null; }
+  else if (s.startsWith('utext ')) onUtextStatus(s.slice(6));
+  else if (s.startsWith('img ')) onImageStart(s.slice(4));
+  else if (s === 'imgend') onImageEnd();
 }
 
 function connect() {
@@ -344,7 +415,7 @@ function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
   ws.binaryType = 'arraybuffer';
   ws.onopen = () => ws.send('auth ' + token);
-  ws.onmessage = (e) => onServerText(String(e.data));
+  ws.onmessage = (e) => (e.data instanceof ArrayBuffer ? onBinary(new Uint8Array(e.data)) : onServerText(String(e.data)));
   ws.onclose = () => { authed = false; setPill(false); if (token) setTimeout(connect, 1000); };
 }
 
@@ -355,7 +426,10 @@ async function bleConnect() {
     const svc = await gatt.getPrimaryService(BLE_SVC);
     bleCmd = await svc.getCharacteristic(BLE_CMD);
     const evt = await svc.getCharacteristic(BLE_EVT);
-    evt.addEventListener('characteristicvaluechanged', (e) => onServerText(new TextDecoder().decode(e.target.value)));
+    evt.addEventListener('characteristicvaluechanged', (e) => {
+      const u = new Uint8Array(e.target.value.buffer, e.target.value.byteOffset, e.target.value.byteLength);
+      if (u[0] === 1) onBinary(u); else onServerText(new TextDecoder().decode(u));
+    });
     await evt.startNotifications();
     $('bleOv').classList.remove('show');
     if (token) await bleCtrl('auth ' + token); else showPair();
@@ -1308,6 +1382,179 @@ $('bBle').onclick = async () => {
   } catch (e) { $('bleErr').textContent = e.message; }
 };
 if (mode === 'ble') $('wifiSec').style.display = 'none';
+
+// ------------------------------------------------------------ 中文送字 (iPad keyboard -> host clipboard paste)
+const compose = $('compose'), ctext = $('ctext');
+function openCompose() {
+  compose.classList.add('show'); document.body.classList.add('composing');
+  if (info.bridge === false) toast('三星平板的 PadKey 橋接程式沒有在執行，中文送不過去', 4000);
+  ctext.focus();
+}
+function closeCompose() { compose.classList.remove('show'); document.body.classList.remove('composing'); ctext.blur(); }
+$('bZh').onclick = () => (compose.classList.contains('show') ? closeCompose() : openCompose());
+$('cClose').onclick = closeCompose;
+async function sendUText(str) {
+  const b = enc.encode(str), N = 160;
+  if (!b.length) return;
+  for (let i = 0; i < b.length; i += N) {
+    const flags = (i === 0 ? 1 : 0) | (i + N >= b.length ? 2 : 0);
+    const pkt = new Uint8Array([M.UTEXT, flags, ...b.slice(i, i + N)]);
+    if (mode === 'ws') { if (ws && ws.readyState === 1) ws.send(pkt); }
+    else if (bleCmd) await bleCmd.writeValueWithResponse(pkt);   // acknowledged: keeps order, no size limit issues
+  }
+}
+async function sendCompose() {
+  const v = ctext.value;
+  if (!v) return;
+  if (!authed) return toast('還沒連線');
+  $('cSend').disabled = true;
+  try { await sendUText(v); ctext.value = ''; } catch (e) { toast('送出失敗：' + e.message); }
+  $('cSend').disabled = false;
+  ctext.focus();
+}
+$('cSend').addEventListener('mousedown', (e) => e.preventDefault());   // keep the iPad keyboard up
+$('cSend').onclick = sendCompose;
+ctext.addEventListener('keydown', (e) => {
+  // Return sends — but not while the Zhuyin keyboard is still choosing characters.
+  if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229 && $('cEnter').checked) { e.preventDefault(); sendCompose(); }
+});
+$('cEnter').checked = localStorage.padkeyEnterSend !== '0';
+$('cEnter').onchange = () => { localStorage.padkeyEnterSend = $('cEnter').checked ? '1' : '0'; };
+function onUtextStatus(s) {
+  if (s === 'nobridge') toast('三星平板的 PadKey 橋接程式沒有在執行，中文送不過去', 4000);
+  else if (s === 'pasted') { $('cStatus').textContent = '✓ 已貼上'; clearTimeout(onUtextStatus.t); onUtextStatus.t = setTimeout(() => $('cStatus').textContent = '', 1500); }
+}
+
+// ------------------------------------------------------------ 描圖 (tracing)
+const IMG = { buf: null, len: 0, w: 0, h: 0 };
+const history = [];
+function onImageStart(arg) {
+  const [size, w, h] = arg.split(' ').map(Number);
+  IMG.buf = new Uint8Array(size); IMG.len = 0; IMG.w = w; IMG.h = h;
+  $('bTrace').classList.add('busy');
+}
+function onBinary(u) {
+  if (u[0] !== 1 || !IMG.buf) return;
+  const n = Math.min(u.length - 1, IMG.buf.length - IMG.len);
+  IMG.buf.set(u.subarray(1, 1 + n), IMG.len); IMG.len += n;
+  $('bTrace').dataset.pct = Math.round(IMG.len * 100 / IMG.buf.length) + '%';
+}
+function onImageEnd() {
+  if (!IMG.buf) return;
+  const url = URL.createObjectURL(new Blob([IMG.buf.subarray(0, IMG.len)], { type: 'image/jpeg' }));
+  IMG.buf = null;
+  history.unshift(url); if (history.length > 8) URL.revokeObjectURL(history.pop());
+  $('bTrace').classList.remove('busy'); $('bTrace').classList.add('new'); delete $('bTrace').dataset.pct;
+  if (trace.classList.contains('show')) setRef(url); else { pendingRef = url; toast('🎨 收到新圖片，打開「描圖」就能描', 3000); }
+}
+
+const trace = $('trace'), stage = $('tStage'), ref = $('tRef'), ink = $('tInk'), ictx = ink.getContext('2d');
+let pendingRef = null, strokes = [], view = { s: 1, x: 0, y: 0 }, penSeen = false;
+const pen = { color: '#ff2bd6', size: 4, erase: false };
+function setRef(url) {
+  ref.onload = () => { fitStage(); redraw(); };
+  ref.src = url; pendingRef = null; $('bTrace').classList.remove('new');
+}
+function fitStage() {
+  const w = ref.naturalWidth || 1200, h = ref.naturalHeight || 900;
+  const area = $('tArea').getBoundingClientRect();
+  const s = Math.min(area.width / w, area.height / h);
+  stage.style.width = w + 'px'; stage.style.height = h + 'px';
+  ink.width = w * 2; ink.height = h * 2; ink.style.width = w + 'px'; ink.style.height = h + 'px';
+  view = { s, x: (area.width - w * s) / 2, y: (area.height - h * s) / 2 };
+  applyView();
+}
+function applyView() { stage.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.s})`; }
+function toStage(e) {
+  const r = $('tArea').getBoundingClientRect();
+  return { x: (e.clientX - r.left - view.x) / view.s, y: (e.clientY - r.top - view.y) / view.s };
+}
+function drawStroke(st) {
+  ictx.save(); ictx.scale(2, 2);
+  ictx.globalCompositeOperation = st.erase ? 'destination-out' : 'source-over';
+  ictx.strokeStyle = st.color; ictx.lineCap = 'round'; ictx.lineJoin = 'round';
+  for (let i = 1; i < st.pts.length; i++) {
+    const a = st.pts[i - 1], b = st.pts[i];
+    ictx.lineWidth = st.size * (st.erase ? 4 : 0.4 + b.p * 1.2);
+    ictx.beginPath(); ictx.moveTo(a.x, a.y); ictx.lineTo(b.x, b.y); ictx.stroke();
+  }
+  ictx.restore();
+}
+function redraw() { ictx.clearRect(0, 0, ink.width, ink.height); strokes.forEach(drawStroke); }
+
+// Pencil draws; fingers pan/zoom (or draw too, until a Pencil has been used).
+const tp = new Map(); let cur = null, pinch = null;
+$('tArea').addEventListener('pointerdown', (e) => {
+  e.preventDefault(); $('tArea').setPointerCapture(e.pointerId);
+  if (e.pointerType === 'pen') penSeen = true;
+  const drawWith = e.pointerType === 'pen' || (!penSeen && e.pointerType !== 'touch') || (!penSeen && tp.size === 0 && !$('tPencil').checked);
+  if (drawWith && !cur) {
+    const p = toStage(e);
+    cur = { id: e.pointerId, color: pen.color, size: pen.size, erase: pen.erase, pts: [{ ...p, p: e.pressure || 0.5 }] };
+    return;
+  }
+  tp.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (cur && cur.id !== e.pointerId && e.pointerType === 'touch' && cur.pts.length < 4) cur = null;   // second finger: it's a gesture
+  if (tp.size === 2) {
+    const [a, b] = [...tp.values()];
+    pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, v: { ...view } };
+  }
+});
+$('tArea').addEventListener('pointermove', (e) => {
+  if (cur && cur.id === e.pointerId) {
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    for (const ev of evs) {
+      const p = toStage(ev); cur.pts.push({ ...p, p: ev.pressure || 0.5 });
+      drawStroke({ ...cur, pts: cur.pts.slice(-2) });
+    }
+    return;
+  }
+  if (!tp.has(e.pointerId)) return;
+  const prev = tp.get(e.pointerId); tp.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (tp.size === 2 && pinch) {
+    const [a, b] = [...tp.values()], r = $('tArea').getBoundingClientRect();
+    const d = Math.hypot(a.x - b.x, a.y - b.y), cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+    const s = Math.max(0.2, Math.min(8, pinch.v.s * d / pinch.d));
+    const px = (pinch.cx - r.left - pinch.v.x) / pinch.v.s, py = (pinch.cy - r.top - pinch.v.y) / pinch.v.s;
+    view = { s, x: cx - r.left - px * s, y: cy - r.top - py * s }; applyView();
+  } else if (tp.size === 1) { view.x += e.clientX - prev.x; view.y += e.clientY - prev.y; applyView(); }
+});
+function tEnd(e) {
+  if (cur && cur.id === e.pointerId) { if (cur.pts.length > 1) strokes.push(cur); cur = null; return; }
+  tp.delete(e.pointerId); if (tp.size < 2) pinch = null;
+}
+$('tArea').addEventListener('pointerup', tEnd); $('tArea').addEventListener('pointercancel', tEnd);
+
+$('bTrace').onclick = () => {
+  trace.classList.add('show');
+  if (pendingRef) setRef(pendingRef); else if (!ref.src && history[0]) setRef(history[0]);
+  requestAnimationFrame(() => { if (ref.naturalWidth) { fitStage(); redraw(); } });
+};
+$('tClose').onclick = () => trace.classList.remove('show');
+$('tOpacity').oninput = () => { ref.style.opacity = $('tOpacity').value; };
+$('tSize').oninput = () => { pen.size = +$('tSize').value; };
+$('tUndo').onclick = () => { strokes.pop(); redraw(); };
+$('tClear').onclick = () => { if (strokes.length && confirm('清除所有描線？')) { strokes = []; redraw(); } };
+$('tFit').onclick = () => { fitStage(); };
+$('tErase').onclick = () => { pen.erase = !pen.erase; $('tErase').classList.toggle('on', pen.erase); };
+$('tPrev').onclick = () => {
+  if (history.length < 2) return toast('沒有更早的圖片');
+  const i = history.indexOf(ref.src); setRef(history[(i + 1) % history.length]);
+};
+document.querySelectorAll('#trace .sw').forEach((b) => b.onclick = () => {
+  pen.color = b.dataset.c; pen.erase = false; $('tErase').classList.remove('on');
+  document.querySelectorAll('#trace .sw').forEach((x) => x.classList.toggle('on', x === b));
+});
+$('tSave').onclick = () => {
+  const c = document.createElement('canvas'); c.width = ink.width; c.height = ink.height;
+  const x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+  if ($('tSaveRef').checked && ref.naturalWidth) { x.globalAlpha = +$('tOpacity').value; x.drawImage(ref, 0, 0, c.width, c.height); x.globalAlpha = 1; }
+  x.drawImage(ink, 0, 0);
+  $('tSaved').src = c.toDataURL('image/png'); $('tSaveBox').classList.add('show');
+};
+$('tSaveBox').onclick = (e) => { if (e.target.id === 'tSaveBox') $('tSaveBox').classList.remove('show'); };
+addEventListener('resize', () => { if (trace.classList.contains('show') && ref.naturalWidth) fitStage(); });
 
 connect();
 </script>

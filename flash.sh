@@ -3,6 +3,9 @@
 # Switches a running PadKey into the bootloader automatically.
 set -e
 cd "$(dirname "$0")"
+# Pause the bridge (it shares the USB port) until flashing is done.
+touch .flashing; trap 'rm -f .flashing' EXIT
+pkill -f "python3 -u .*padkey_bridge[.]py" 2>/dev/null && sleep 1
 TU=/data/data/com.termux/files/usr/bin/termux-usb
 PY=$HOME/work/.venv/bin/python
 dev() { timeout 15 $TU -l | grep -o '/dev/bus/usb/[0-9/]*' | head -1; }

@@ -22,7 +22,7 @@
 #include "web_assets.h"
 #include "protocol.h"
 
-#define FW_VERSION "1.3.4"
+#define FW_VERSION "1.4.0"
 
 // ---- T-Dongle-S3 pins (from LilyGO examples) ----
 #define PIN_LCD_MOSI 3
@@ -399,6 +399,42 @@ static void handleMsg(const Msg &m, int &accX, int &accY) {
   }
 }
 
+// ------------------------------------------------------- Host bridge ----
+// A small program on the host tablet (via USB serial) pastes Unicode text
+// for us and streams screenshots to the iPad.
+static SemaphoreHandle_t cdcLock;
+static volatile uint32_t bridgeSeen = 0;      // millis() of last heartbeat
+static bool bridgeAlive() { return bridgeSeen && millis() - bridgeSeen < 6000; }
+
+static void cdcSend(uint8_t type, const uint8_t *p, size_t n) {
+  if (!cdcLock) return;
+  uint8_t h[4] = {0xA5, type, (uint8_t)(n & 0xFF), (uint8_t)(n >> 8)};
+  xSemaphoreTake(cdcLock, portMAX_DELAY);
+  Serial.write(h, 4);
+  if (n) Serial.write(p, n);
+  xSemaphoreGive(cdcLock);
+}
+
+// Reassembles M_UTEXT pieces and hands the text to the bridge. Returns a status
+// string for the sender ("" = in progress).
+static uint8_t utextBuf[1024];
+static size_t utextLen = 0;
+static portMUX_TYPE utextMux = portMUX_INITIALIZER_UNLOCKED;
+static String handleUtext(const uint8_t *d, size_t n) {
+  if (n < 2) return "";
+  uint8_t flags = d[1];
+  portENTER_CRITICAL(&utextMux);
+  if (flags & 1) utextLen = 0;
+  size_t take = min(n - 2, sizeof(utextBuf) - utextLen);
+  memcpy(utextBuf + utextLen, d + 2, take);
+  utextLen += take;
+  portEXIT_CRITICAL(&utextMux);
+  if (!(flags & 2)) return "";
+  if (!bridgeAlive()) return "nobridge";
+  cdcSend(D_TEXT, utextBuf, utextLen);
+  return "sent";
+}
+
 // ------------------------------------------------------------- Network ----
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
@@ -454,6 +490,7 @@ static String statusJson() {
   String s = "{\"usb\":";
   s += usbUp ? "true" : "false";
   s += ",\"caps\":"; s += capsOn ? "true" : "false";
+  s += ",\"bridge\":"; s += bridgeAlive() ? "true" : "false";
   s += ",\"ap\":"; s += apMode ? "true" : "false";
   s += ",\"ip\":\""; s += ipString();
   s += "\",\"ssid\":\""; s += jsonEsc(apMode ? apSsid : wifiSsid);
@@ -493,7 +530,10 @@ static void onWs(AsyncWebSocket *s, AsyncWebSocketClient *c, AwsEventType type, 
     }
     return;
   }
-  if (info->opcode == WS_BINARY && len > 0 && isAuthed(c->id())) enqueue(data, len);
+  if (info->opcode == WS_BINARY && len > 0 && isAuthed(c->id())) {
+    if (data[0] == M_UTEXT) { String r = handleUtext(data, len); if (r.length()) c->text("utext " + r); }
+    else enqueue(data, len);
+  }
 }
 
 static void setupWeb() {
@@ -654,6 +694,7 @@ static BLECharacteristic bleCmd, bleEvt;
 static std::vector<uint16_t> bleAuthed;
 static portMUX_TYPE bleMux = portMUX_INITIALIZER_UNLOCKED;
 static bool bleOk = false;
+static volatile uint16_t bleMtu = 23;
 
 static bool bleIsAuthed(uint16_t h) {
   bool r = false;
@@ -679,16 +720,20 @@ static void bleReply(uint16_t h, const String &s) {
 static String bleStatusJson() {  // short: fits in one notification
   String s = "{\"usb\":"; s += usbUp ? "true" : "false";
   s += ",\"caps\":"; s += capsOn ? "true" : "false";
+  s += ",\"bridge\":"; s += bridgeAlive() ? "true" : "false";
   s += ",\"ble\":true,\"fw\":\"" FW_VERSION "\"}";
   return s;
 }
 
 static void setupBle() {
   if (!BLE.begin(apSsid.c_str())) return;
+  BLE.setMTU(517);
   bleServer = BLE.createServer();
   if (!bleServer) return;
   bleServer.advertiseOnDisconnect(true);
+  bleServer.onMtuChanged([](BLEServer &srv, const BLEConnInfo &c, uint16_t mtu) { bleMtu = mtu; });
   bleServer.onConnect([](BLEServer &srv, const BLEConnInfo &c) {
+    bleMtu = c.getMTU();
     BLEConnParams p = {12, 24, 0, 400};  // 15-30 ms interval: snappy cursor
     srv.updateConnParams(c.getHandle(), p);
   });
@@ -720,7 +765,9 @@ static void setupBle() {
       }
       return;
     }
-    if (bleIsAuthed(h)) enqueue(d, n);
+    if (!bleIsAuthed(h)) return;
+    if (d[0] == M_UTEXT) { String r = handleUtext(d, n); if (r.length()) bleReply(h, "utext " + r); }
+    else enqueue(d, n);
   });
   if (!bleServer.start()) return;
   BLEAdvertising adv = BLE.getAdvertising();
@@ -771,6 +818,77 @@ static void usbEvent(void *arg, esp_event_base_t base, int32_t id, void *data) {
   if (id == ARDUINO_USB_STOPPED_EVENT || id == ARDUINO_USB_SUSPEND_EVENT) usbUp = false;
 }
 
+// Send a screenshot chunk to every paired client. BLE: split to MTU size,
+// each notification starts with 0x01 so the app can tell it from text.
+static bool forwardImageChunk(const uint8_t *p, size_t n) {
+  portENTER_CRITICAL(&authMux);
+  std::vector<uint32_t> wsIds = authed;
+  portEXIT_CRITICAL(&authMux);
+  for (auto id : wsIds) {
+    uint8_t *buf = (uint8_t *)malloc(n + 1);
+    if (!buf) return false;
+    buf[0] = 0x01; memcpy(buf + 1, p, n);
+    ws.binary(id, buf, n + 1);
+    free(buf);
+  }
+  portENTER_CRITICAL(&bleMux);
+  std::vector<uint16_t> ids = bleAuthed;
+  portEXIT_CRITICAL(&bleMux);
+  if (ids.empty() || !bleOk) return true;
+  size_t room = max(20, (int)bleMtu - 3) - 1;
+  uint8_t pkt[520];
+  for (size_t off = 0; off < n; off += room) {
+    size_t k = min(room, n - off);
+    pkt[0] = 0x01; memcpy(pkt + 1, p + off, k);
+    for (auto h : ids) {
+      for (int tries = 0; tries < 200; tries++) {        // wait for radio buffers
+        if (bleEvt.notify(h, pkt, k + 1)) break;
+        delay(3);
+      }
+    }
+  }
+  return true;
+}
+
+static void broadcastText(const String &s) {
+  portENTER_CRITICAL(&authMux);
+  std::vector<uint32_t> wsIds = authed;
+  portEXIT_CRITICAL(&authMux);
+  for (auto id : wsIds) ws.text(id, s);
+  portENTER_CRITICAL(&bleMux);
+  std::vector<uint16_t> ids = bleAuthed;
+  portEXIT_CRITICAL(&bleMux);
+  for (auto h : ids) bleReply(h, s);
+}
+
+// USB serial frames from the host bridge.
+static void pollBridge() {
+  static uint8_t buf[1100];
+  static size_t have = 0, need = 0;
+  static uint8_t type = 0;
+  while (Serial.available()) {
+    int c = Serial.read();
+    if (c < 0) break;
+    if (have == 0 && c != 0xA5) continue;           // resync
+    buf[have++] = c;
+    if (have == 4) { type = buf[1]; need = buf[2] | buf[3] << 8; if (need > 1024) { have = 0; continue; } }
+    if (have >= 4 && have == 4 + need) {
+      const uint8_t *p = buf + 4;
+      bridgeSeen = millis();
+      switch (type) {
+        case H_HELLO: cdcSend(D_HELLO, (const uint8_t *)FW_VERSION, strlen(FW_VERSION)); break;
+        case H_PASTE: { const uint8_t m[] = {M_TAP, 0x01, 0x19}; enqueue(m, 3);         // Ctrl+V
+                        broadcastText("utext pasted"); break; }
+        case H_IMG_BEGIN: { String a; a.concat((const char *)p, need); broadcastText("img " + a);
+                            setLabel("IMAGE", 0x07FF); break; }
+        case H_IMG_DATA: forwardImageChunk(p, need); cdcSend(D_ACK, nullptr, 0); break;
+        case H_IMG_END: broadcastText("imgend"); break;
+      }
+      have = 0;
+    }
+  }
+}
+
 static void kbdEvent(void *arg, esp_event_base_t base, int32_t id, void *data) {
   if (id == ARDUINO_USB_HID_KEYBOARD_LED_EVENT) {
     capsOn = ((arduino_usb_hid_keyboard_event_data_t *)data)->capslock;
@@ -796,7 +914,9 @@ void setup() {
   Mouse.begin();
   Consumer.begin();
   USB.begin();
+  Serial.setRxBufferSize(4096);
   Serial.begin(115200);
+  cdcLock = xSemaphoreCreateMutex();
 
   SPI.begin(PIN_LCD_SCLK, -1, PIN_LCD_MOSI, PIN_LCD_CS);
   tft.initR(INITR_MINI160x80_PLUGIN);
@@ -809,7 +929,7 @@ void setup() {
   setupWifi();
   setupWeb();
   setupBle();
-  Serial.println("PadKey " FW_VERSION " ready at " + ipString());
+  // (no boot banner: the USB serial line carries framed bridge data)
 }
 
 void loop() {
@@ -831,6 +951,8 @@ void loop() {
     tft.drawRGBBitmap(0, 0, canvas.getBuffer(), 160, 80);
   }
   if (now - lastLed > 20) { lastLed = now; updateLed(); }
+  static bool lastBridge = false;
+  if (bridgeAlive() != lastBridge) { lastBridge = bridgeAlive(); statusDirty = true; }
   if (now - lastStatus > 3000 || (statusDirty && now - lastStatus > 100)) {
     statusDirty = false;
     lastStatus = now;
@@ -850,6 +972,7 @@ void loop() {
     apMode = false;
   }
 
+  pollBridge();
   handleButton();
   if (rebootAt && now > rebootAt) ESP.restart();
   delay(1);
