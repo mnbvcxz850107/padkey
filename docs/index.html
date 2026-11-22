@@ -186,6 +186,25 @@ body.phone #touchbar { display: none; }
 .tb-scroll .k { min-width: 0 !important; flex: 1 !important; }
 .hot { animation: hot .45s ease-out; }
 
+/* ---------- standard keyboard ---------- */
+#kbd.std { background: #1b1b1e; padding: 8px 8px 10px; border: none; }
+.srow { display: flex; gap: 6px; margin-bottom: 6px; }
+.srow:last-child { margin-bottom: 0; }
+#kbd.std .k { flex: 1; min-width: 0; height: 54px; border-radius: 8px; background: #3a3a3e; border: none; color: #f2f2f5; font-size: 19px;
+  box-shadow: 0 3px 0 #121214; flex-direction: column; gap: 1px; padding: 0; }
+#kbd.std .k.mod { background: #2a2a2e; font-size: 15px; color: #cfcfd6; }
+#kbd.std .k .sh { font-size: 12px; color: #9a9aa4; line-height: 1; }
+#kbd.std .k .pl { line-height: 1.1; }
+#kbd.std .k.down { background: #6a6a72; transform: translateY(2px); box-shadow: 0 1px 0 #121214; }
+#kbd.std .k.latched { color: var(--cyan); box-shadow: 0 0 0 2px var(--cyan) inset, 0 3px 0 #121214; }
+#kbd.std .k.locked { background: rgba(0,240,255,.25); }
+#kbd.std .k.capson { box-shadow: 0 0 0 2px var(--yellow) inset, 0 3px 0 #121214; color: var(--yellow); }
+#kbd.std .w125 { flex: 1.25; } #kbd.std .w15 { flex: 1.5; } #kbd.std .w175 { flex: 1.75; } #kbd.std .w2 { flex: 2; }
+#kbd.std .w225 { flex: 2.25; } #kbd.std .w625 { flex: 6.25; }
+body.phone #kbd.std .k { height: 38px; font-size: 14px; }
+body.phone #kbd.std .k .sh { font-size: 9px; }
+body.phone .srow { gap: 3px; margin-bottom: 4px; }
+
 /* ---------- iPad native keyboard look (dark) ---------- */
 #kbd.native { background: #1f1f21; border: none; padding: 8px 6px 10px; }
 .nrow { display: flex; gap: 8px; margin-bottom: 9px; }
@@ -949,7 +968,6 @@ function setZy(on, quiet) {
   document.body.classList.toggle('zy', on);
   ['tbZy', 'stripZy'].forEach((id) => $(id) && $(id).classList.toggle('on', on));
   if (on && document.activeElement === sys) sys.blur();
-  if (typeof buildNativeKbd === 'function' && nkEls) buildNativeKbd();
   refreshKeys();
   if (typeof renderTouchBar === 'function' && escKey) renderTouchBar();
   setZy.init = false;
@@ -993,7 +1011,7 @@ const ZY = {
   0x04: 'ㄇ', 0x16: 'ㄋ', 0x07: 'ㄎ', 0x09: 'ㄑ', 0x0A: 'ㄕ', 0x0B: 'ㄘ', 0x0D: 'ㄨ', 0x0E: 'ㄜ', 0x0F: 'ㄠ', 0x33: 'ㄤ',
   0x1D: 'ㄈ', 0x1B: 'ㄌ', 0x06: 'ㄏ', 0x19: 'ㄒ', 0x05: 'ㄖ', 0x11: 'ㄙ', 0x10: 'ㄩ', 0x36: 'ㄝ', 0x37: 'ㄡ', 0x38: 'ㄥ',
 };
-let zyMode = localStorage.padkeyZy === '1', hostCaps = false;
+let zyMode = false, hostCaps = false;   // keyboard mode is English only; Chinese goes through ✍️ 中文
 const latched = new Map();   // usage -> 'latched' | 'locked'
 const keyEls = [];
 const modBit = (u) => 1 << (u - 0xE0);
@@ -1004,6 +1022,7 @@ function refreshKeys() {
   for (const { el, def } of keyEls) {
     const [lab, sh, u] = def;
     const letter = /^[a-z]$/.test(lab);
+    if (el._std) { el.classList.toggle('capson', u === 0x39 && hostCaps); el.classList.toggle('latched', latched.has(u)); el.classList.toggle('locked', latched.get(u) === 'locked'); continue; }
     if (zyMode && ZY[u] && !shift) el.innerHTML = `<b>${ZY[u]}</b><i>${lab}</i>`;
     else if (sh) el.textContent = (shift !== (letter && hostCaps)) ? sh : lab;
     el.classList.toggle('capson', u === 0x39 && hostCaps);
@@ -1290,15 +1309,40 @@ function refreshNative() {
   }
 }
 
+// ------------------------------------------------------------ standard 65% keyboard (English only)
+const L = (c) => [c.toUpperCase(), 0, 0x04 + c.charCodeAt(0) - 97];
+const STD = [
+  [['`', '~', 0x35], ['1', '!', 0x1E], ['2', '@', 0x1F], ['3', '#', 0x20], ['4', '$', 0x21], ['5', '%', 0x22], ['6', '^', 0x23], ['7', '&', 0x24],
+    ['8', '*', 0x25], ['9', '(', 0x26], ['0', ')', 0x27], ['-', '_', 0x2D], ['=', '+', 0x2E], ['⌫', 0, 0x2A, 'mod w2'], ['Del', 0, 0x4C, 'mod']],
+  [['Tab', 0, 0x2B, 'mod w15'], ...'qwertyuiop'.split('').map(L), ['[', '{', 0x2F], [']', '}', 0x30], ['\\', '|', 0x31, 'w15'], ['PgUp', 0, 0x4B, 'mod']],
+  [['Caps', 0, 0x39, 'mod w175'], ...'asdfghjkl'.split('').map(L), [';', ':', 0x33], ["'", '"', 0x34], ['Enter', 0, 0x28, 'mod w225'], ['PgDn', 0, 0x4E, 'mod']],
+  [['Shift', 0, 0xE1, 'mod w225 m'], ...'zxcvbnm'.split('').map(L), [',', '<', 0x36], ['.', '>', 0x37], ['/', '?', 0x38], ['Shift', 0, 0xE5, 'mod w175 m'], ['↑', 0, 0x52, 'mod'], ['End', 0, 0x4D, 'mod']],
+  [['Ctrl', 0, 0xE0, 'mod w125 m'], ['Win', 0, 0xE3, 'mod w125 m'], ['Alt', 0, 0xE2, 'mod w125 m'], ['', 0, 0x2C, 'w625'], ['Alt', 0, 0xE6, 'mod m'], ['Ctrl', 0, 0xE4, 'mod m'],
+    ['←', 0, 0x50, 'mod'], ['↓', 0, 0x51, 'mod'], ['→', 0, 0x4F, 'mod']],
+];
+function buildStdKbd() {
+  const kb = $('kbd'); kb.innerHTML = ''; kb.className = 'std';
+  for (const row of STD) {
+    const r = document.createElement('div'); r.className = 'srow';
+    for (const def of row) {
+      const el = makeKey(def);
+      el._std = true;
+      if (def[1]) el.innerHTML = `<span class="sh"></span><span class="pl"></span>`, el.querySelector('.sh').textContent = def[1], el.querySelector('.pl').textContent = def[0];
+      r.appendChild(el);
+    }
+    kb.appendChild(r);
+  }
+}
+
 function buildKbd() {
-  buildNativeKbd();
+  buildStdKbd();
   // Phone: one scrollable strip of special keys; letters come from the iOS keyboard.
   const strip = $('strip');
   const tog = document.createElement('button'); tog.className = 'k'; tog.textContent = '⌨️';
   tog.addEventListener('mousedown', (e) => e.preventDefault());
   tog.onclick = () => { if (document.activeElement === sys) sys.blur(); else { sys.value = ''; sys.focus(); } };
   strip.appendChild(tog);
-  const zy = document.createElement('button'); zy.id = 'stripZy'; zy.textContent = '注';
+  const zy = document.createElement('button'); zy.id = 'stripZy'; zy.textContent = '注'; zy.style.display = 'none';
   zy.addEventListener('mousedown', (e) => e.preventDefault());
   zy.onclick = () => switchIme();
   strip.appendChild(zy);
