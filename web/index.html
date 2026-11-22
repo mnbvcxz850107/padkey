@@ -298,6 +298,9 @@ body.composing #kbd { display: none !important; }
 #tAiMenu.show { display: flex; }
 #tAiMenu > div { background: #1c1c1e; padding: 16px; border-radius: 14px; width: min(420px, 90vw); }
 #tAiMenu p { color: #bbb; margin: 0 0 8px; font-size: 14px; }
+#tAiMenu > div { width: min(560px, 92vw) !important; }
+.aigrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 8px; margin-top: 6px; }
+#aiTopic { margin-bottom: 4px; }
 #tAI.busy { color: var(--yellow); border-color: var(--yellow); }
 #tSaveBox { display: none; position: absolute; inset: 0; background: rgba(0,0,0,.8); align-items: center; justify-content: center; z-index: 2; }
 #tSaveBox.show { display: flex; }
@@ -446,13 +449,21 @@ body.phone #bZh, body.phone #bTrace { padding: 0 8px; font-size: 13px; }
   <div id="tArea"><div id="tStage"><img id="tRef" alt=""><canvas id="tInk"></canvas><div id="tSel"></div></div>
     <div class="tempty">按上方「📸 擷取平板」，或在三星平板截圖（電源鍵＋音量下），<br>圖片就會傳到這裡；再用「✂️ 裁切」框出要描的部分。</div></div>
   <div id="tAiMenu"><div>
-    <p>把目前的圖交給 AI 整理成好描的版本（約 10–60 秒）：</p>
-    <button class="btn ghost" data-k="line">🖊 線稿（照著描）</button>
-    <button class="btn ghost" data-k="table">📋 表格</button>
-    <button class="btn ghost" data-k="map">🗺 地圖</button>
-    <button class="btn ghost" data-k="text">🔤 文字</button>
-    <button class="btn ghost" data-k="custom">✏️ 自訂指示…</button>
-    <button class="btn" data-k="">取消（用原圖）</button>
+    <p>AI 會整理成「點到為止」的描圖練習稿（約 10–60 秒）。有截圖就照截圖內容；沒有截圖就照下面的主題畫。</p>
+    <input type="text" id="aiTopic" placeholder="主題／補充說明（選填），例如：腎元的構造、β-blocker 的機轉" autocomplete="off">
+    <div class="aigrid">
+      <button class="btn ghost" data-k="bujo">📓 子彈筆記</button>
+      <button class="btn ghost" data-k="mind">🧠 心智地圖</button>
+      <button class="btn ghost" data-k="anat2d">🫀 2D 解剖圖</button>
+      <button class="btn ghost" data-k="anat3d">🧊 3D 解剖圖</button>
+      <button class="btn ghost" data-k="mech">⚙️ 機轉圖</button>
+      <button class="btn ghost" data-k="line">🖊 線稿</button>
+      <button class="btn ghost" data-k="table">📋 表格</button>
+      <button class="btn ghost" data-k="map">🗺 地圖</button>
+      <button class="btn ghost" data-k="text">🔤 文字</button>
+      <button class="btn ghost" data-k="custom">✏️ 自訂指示…</button>
+    </div>
+    <button class="btn" data-k="">取消</button>
   </div></div>
   <div id="tSaveBox"><div><p>長按圖片 → 儲存影像</p><label class="tl"><input type="checkbox" id="tSaveRef" checked> 包含原圖</label><img id="tSaved" alt=""></div></div>
 </div>
@@ -1824,11 +1835,18 @@ $('tShot').onclick = () => {
   toast('📸 已讓平板截圖，傳送中…（幾秒後會直接進入裁切）', 3500);
 };
 // ---- AI tidy-up: this device -> OpenAI directly (key kept in this browser only)
+// Every preset is a TRACING-PRACTICE sheet: minimal, airy, black on white, light text.
+const AI_COMMON = ' This is a TRACING PRACTICE sheet for a biology / medical student, so keep it minimal and selective ("just enough"): only the key structures or ideas, generous white space, clean even black outlines on a pure white background, no colors, no shading or textures, no dense or tiny details. All text must be short labels drawn in light gray (#BBBBBB) so the student can trace over them; keep labels in the same language as the source (Traditional Chinese if the topic is Chinese).';
 const AI_PROMPTS = {
-  line: 'Convert this image into clean black line art on a pure white background for tracing practice. Keep every important shape, proportion and position exactly as in the original. Remove colors, shading, textures, photos and noise. Use clear, even, medium-weight outlines.',
-  table: 'Redraw this table as a clean black-on-white table for tracing practice: straight ruled grid lines, exactly the same rows, columns and cell contents. Keep the text identical (same language and characters), written in clear, large, legible strokes. No colors or shading.',
-  map: 'Simplify this map into a clean black-on-white tracing template. Keep the main roads, rivers, coastlines, borders and key landmarks in the same positions with their labels; drop minor details, colors, textures and shading. Use clear outlines.',
-  text: 'Rewrite the text in this image as large, clean, high-contrast black characters on a white background, with exactly the same wording, language and line breaks, easy to trace. Remove everything that is not text.',
+  bujo: 'Turn this content into a bullet-journal style study page: a short title, 3 to 6 key points as short phrases with simple bullet symbols (•, –, ○), and at most two tiny doodle icons.',
+  mind: 'Turn this content into a hand-drawn style mind map: one central topic bubble, 4 to 6 main curved branches, at most 2 short sub-branches each, keyword labels only.',
+  anat2d: 'Render this as a clean 2D anatomical line drawing in textbook outline style: only the main structures, crisp outlines, 3 to 6 leader lines with short labels.',
+  anat3d: 'Render this as a simple 3D anatomical line illustration: light contour lines that suggest volume (no heavy hatching), only the main structures, 3 to 6 short labels.',
+  mech: 'Render this as a mechanism / pathway diagram: 4 to 8 boxes or ovals connected by arrows in a clear flow, activation arrows (→) and inhibition bars (⊣) where relevant, short labels only.',
+  line: 'Convert this image into clean black line art for tracing, keeping every important shape, proportion and position as in the original; drop colors, shading, textures and noise.',
+  table: 'Redraw this table as a clean ruled table with straight grid lines, the same rows, columns and cell contents (same wording and language).',
+  map: 'Simplify this map into a clean tracing template: main roads, rivers, coastlines, borders and key landmarks in the same positions with their labels; drop minor details.',
+  text: 'Rewrite the text in this image as large, clear characters with exactly the same wording, language and line breaks; remove everything that is not text.',
 };
 const aiCfg = () => ({ key: localStorage.padkeyAiKey || '', model: localStorage.padkeyAiModel || '', quality: localStorage.padkeyAiQuality ?? 'low' });
 $('aiKey').value = aiCfg().key; $('aiModel').value = aiCfg().model; $('aiQuality').value = aiCfg().quality;
@@ -1867,7 +1885,6 @@ $('aiQuality').onchange = () => { localStorage.padkeyAiQuality = $('aiQuality').
 $('aiClear').onclick = () => { localStorage.removeItem('padkeyAiKey'); $('aiKey').value = ''; toast('已刪除這台裝置上的金鑰'); };
 
 $('tAI').onclick = () => {
-  if (!ref.naturalWidth) return toast('還沒有圖片');
   if (!aiCfg().key || !aiCfg().model) return toast('先到 ⚙️ 設定填入 OpenAI 金鑰、選好模型', 3500);
   setCrop(false); $('tAiMenu').classList.add('show');
 };
@@ -1876,8 +1893,11 @@ document.querySelectorAll('#tAiMenu button').forEach((b) => b.onclick = () => {
   const k = b.dataset.k;
   if (!k) return;
   let prompt = AI_PROMPTS[k];
-  if (k === 'custom') { prompt = window.prompt('要 AI 怎麼整理這張圖？（例如：只保留建築物外框，畫成線稿）'); if (!prompt) return; }
-  aiProcess(prompt);
+  if (k === 'custom') { prompt = window.prompt('要 AI 怎麼整理／畫什麼？（例如：只保留建築物外框）'); if (!prompt) return; }
+  const topic = $('aiTopic').value.trim();
+  if (!ref.naturalWidth && !topic) return toast('沒有截圖時，請先填主題（例如：腎元的構造）', 3500);
+  if (topic) prompt += (ref.naturalWidth ? ' Focus on / additional instructions: ' : ' Topic: ') + topic + '.';
+  aiProcess(prompt + AI_COMMON);
 });
 
 function refAsPng() {
@@ -1892,13 +1912,20 @@ async function aiProcess(prompt) {
   const { key, model, quality } = aiCfg();
   aiBusy = true; $('tAI').classList.add('busy'); $('tAI').textContent = '✨ 處理中…';
   try {
-    const fd = new FormData();
-    fd.append('model', model);
-    fd.append('prompt', prompt);
-    fd.append('image', await refAsPng(), 'image.png');
-    if (quality) fd.append('quality', quality);
     const ctl = new AbortController(); const tmo = setTimeout(() => ctl.abort(), 180000);
-    const r = await fetch('https://api.openai.com/v1/images/edits', { method: 'POST', headers: { Authorization: 'Bearer ' + key }, body: fd, signal: ctl.signal });
+    let r;
+    if (ref.naturalWidth) {                       // tidy up the current picture
+      const fd = new FormData();
+      fd.append('model', model);
+      fd.append('prompt', prompt);
+      fd.append('image', await refAsPng(), 'image.png');
+      if (quality) fd.append('quality', quality);
+      r = await fetch('https://api.openai.com/v1/images/edits', { method: 'POST', headers: { Authorization: 'Bearer ' + key }, body: fd, signal: ctl.signal });
+    } else {                                      // no picture: draw from the topic
+      const body = { model, prompt };
+      if (quality) body.quality = quality;
+      r = await fetch('https://api.openai.com/v1/images/generations', { method: 'POST', headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ctl.signal });
+    }
     clearTimeout(tmo);
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error((j.error && j.error.message) || ('HTTP ' + r.status));
@@ -1910,7 +1937,7 @@ async function aiProcess(prompt) {
     if (strokes.length && !confirm('AI 整理好了。換成新圖會清除目前的描線，確定嗎？（原圖可用「上一張」找回）')) return;
     const url = URL.createObjectURL(blob);
     history.unshift(url); strokes = []; setRef(url);
-    toast('✨ AI 整理完成（原圖在「上一張」）', 3000);
+    toast(history.length > 1 ? '✨ AI 整理完成（原圖在「上一張」）' : '✨ 描圖稿生成完成', 3000);
   } catch (e) {
     toast('AI 整理失敗：' + (e.name === 'AbortError' ? '超過 3 分鐘沒有回應' : errText(e)), 6000);
   } finally {
