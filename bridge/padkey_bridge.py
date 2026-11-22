@@ -177,7 +177,7 @@ def send_image(link, path):
 
 def handle_text(link, payload):
     text = payload.decode("utf-8", errors="replace")
-    log("paste:", text[:40])
+    log(f"paste: {len(text)} chars")   # never log the text itself (privacy)
     try:
         set_clipboard(text)
         time.sleep(0.15)

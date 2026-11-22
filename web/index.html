@@ -256,8 +256,7 @@ body.composing:not(.phone) #sidekeys { display: grid; width: 330px; flex: none; 
 #sidekeys .csep { display: none; }
 /* typing Chinese (iPad): small trackpad + key cluster, big text box */
 body.phone.composing .padwrap { display: none !important; }
-body.composing:not(.phone) header { height: 42px; padding: 4px 12px; }
-body.composing:not(.phone) header .hbtn { height: 32px; }
+
 body.composing:not(.phone) main { padding: 8px 12px 6px; min-height: 120px; }
 body.composing:not(.phone) .padwrap { width: auto !important; flex: 1; }
 #sidekeys button { font-size: 18px; }
@@ -308,6 +307,20 @@ body.composing #kbd { display: none !important; }
 #tSaveBox img { max-width: 80vw; max-height: 70vh; -webkit-touch-callout: default; -webkit-user-select: auto; user-select: auto; }
 body.phone #bZh, body.phone #bTrace { padding: 0 8px; font-size: 13px; }
 
+/* ---------- header collapsed into a floating ball ---------- */
+#fab { position: fixed; z-index: 31; width: 46px; height: 46px; border-radius: 50%; top: 8px; left: 10px;
+  background: rgba(20,10,46,.72); border: 2px solid var(--pink); box-shadow: 0 0 12px rgba(255,43,214,.45); touch-action: none;
+  display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+#fab span { width: 14px; height: 14px; border-radius: 50%; background: var(--pink); box-shadow: 0 0 8px var(--pink); }
+#fab.ok { border-color: var(--green); box-shadow: 0 0 12px rgba(57,255,136,.45); }
+#fab.ok span { background: var(--green); box-shadow: 0 0 8px var(--green); }
+header { position: fixed !important; z-index: 30; display: none !important; flex-wrap: wrap; height: auto !important; width: auto; max-width: 92vw;
+  padding: 12px !important; gap: 10px !important; background: rgba(13,6,32,.97); border: 1px solid rgba(0,240,255,.5); border-radius: 18px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.6), 0 0 20px rgba(0,240,255,.2); }
+body.menuopen header { display: flex !important; }
+header .spacer { display: none; }
+header .hbtn { height: 40px !important; }
+
 @media (orientation: portrait) {
   main { flex-direction: column; }
   #fx { width: auto; height: 34%; flex: none; }
@@ -317,6 +330,7 @@ body.phone #bZh, body.phone #bTrace { padding: 0 8px; font-size: 13px; }
 </style>
 </head>
 <body>
+<button id="fab" aria-label="選單"><span></span></button>
 <header>
   <div class="logo">PADKEY</div>
   <span id="st" class="pill bad">未連線</span>
@@ -637,6 +651,7 @@ function status(j) {
   const u = $('usb'); u.textContent = j.usb ? 'USB ✓' : 'USB ✗'; u.className = 'pill ' + (j.usb ? 'ok' : 'bad');
 }
 function setPill(ok) {
+  const f = $('fab'); if (f) f.classList.toggle('ok', ok);
   const p = $('st'); p.textContent = ok ? '● 已連線' : '○ 連線中…'; p.className = 'pill ' + (ok ? 'ok' : 'bad');
 }
 function sendText(str) {
@@ -1959,6 +1974,44 @@ $('tSave').onclick = () => {
 $('tSaveRef').onchange = renderSave;
 $('tSaveBox').onclick = (e) => { if (e.target.id === 'tSaveBox') $('tSaveBox').classList.remove('show'); };
 addEventListener('resize', () => { if (trace.classList.contains('show') && ref.naturalWidth) fitStage(); });
+
+// ---- floating ball: tap = menu, drag = move (position remembered)
+(function () {
+  const fab = $('fab'), hdr = document.querySelector('header');
+  const saved = JSON.parse(localStorage.padkeyFab || 'null');
+  const place = (x, y) => {
+    x = Math.max(4, Math.min(innerWidth - 50, x)); y = Math.max(4, Math.min(innerHeight - 50, y));
+    fab.style.left = x + 'px'; fab.style.top = y + 'px'; fab.style.right = 'auto';
+  };
+  if (saved) place(saved.x, saved.y);
+  let sx = 0, sy = 0, ox = 0, oy = 0, moved = false;
+  fab.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); fab.setPointerCapture(e.pointerId);
+    const r = fab.getBoundingClientRect(); sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top; moved = false;
+  });
+  fab.addEventListener('pointermove', (e) => {
+    if (!fab.hasPointerCapture(e.pointerId)) return;
+    if (Math.hypot(e.clientX - sx, e.clientY - sy) > 6) moved = true;
+    if (moved) place(ox + e.clientX - sx, oy + e.clientY - sy);
+  });
+  fab.addEventListener('pointerup', () => {
+    const r = fab.getBoundingClientRect();
+    if (moved) { localStorage.padkeyFab = JSON.stringify({ x: r.left, y: r.top }); return; }
+    const open = !document.body.classList.contains('menuopen');
+    document.body.classList.toggle('menuopen', open);
+    if (open) {               // put the panel next to the ball, inside the screen
+      const w = hdr.offsetWidth, h = hdr.offsetHeight;
+      let x = r.left, y = r.bottom + 8;
+      if (x + w > innerWidth - 8) x = r.right - w;
+      if (x < 8) x = Math.min(r.left, innerWidth - w - 8);
+      if (y + h > innerHeight - 8) y = Math.max(8, r.top - h - 8);
+      hdr.style.left = Math.max(8, x) + 'px'; hdr.style.top = y + 'px';
+    }
+  });
+  // any button in the menu closes it; tapping elsewhere closes it too
+  hdr.addEventListener('click', (e) => { if (e.target.closest('button')) setTimeout(() => document.body.classList.remove('menuopen'), 120); });
+  document.addEventListener('pointerdown', (e) => { if (!e.target.closest('header, #fab')) document.body.classList.remove('menuopen'); }, true);
+})();
 
 connect();
 </script>
