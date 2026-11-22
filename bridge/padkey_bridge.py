@@ -121,7 +121,10 @@ def newest_shot(since):
     best = None
     for d in SHOT_DIRS:
         for f in glob.glob(os.path.join(d, "*")):
-            if not f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+            name = os.path.basename(f)
+            if not name.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                continue
+            if name.startswith((".", "thumbnail_")) or ".pending" in name:   # Samsung temp/thumbnail files
                 continue
             try:
                 m = os.path.getmtime(f)
