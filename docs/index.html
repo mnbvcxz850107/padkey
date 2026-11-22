@@ -246,6 +246,7 @@ body.composing #kbd { display: none !important; }
 #tRef { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .5; pointer-events: none; }
 #tRef:not([src]) { display: none; }
 #tInk { position: absolute; left: 0; top: 0; pointer-events: none; }
+#tSel { position: absolute; display: none; border: 3px dashed var(--yellow); background: rgba(255,230,0,.12); box-shadow: 0 0 0 9999px rgba(0,0,0,.45); pointer-events: none; }
 .tempty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; color: #777; line-height: 1.8; pointer-events: none; }
 #tStage:has(#tRef[src]) + .tempty { display: none; }
 #tSaveBox { display: none; position: absolute; inset: 0; background: rgba(0,0,0,.8); align-items: center; justify-content: center; z-index: 2; }
@@ -373,11 +374,14 @@ body.phone #bZh, body.phone #bTrace { padding: 0 8px; font-size: 13px; }
     <button class="hbtn" id="tClear">🗑</button>
     <button class="hbtn" id="tFit">⤢</button>
     <button class="hbtn" id="tPrev">上一張</button>
+    <button class="hbtn" id="tShot">📸 擷取平板</button>
+    <button class="hbtn" id="tCrop">✂️ 裁切</button>
+    <span id="tCropActs" style="display:none"><button class="hbtn on" id="tCropOk">套用</button> <button class="hbtn" id="tCropNo">取消</button></span>
     <label class="tl"><input type="checkbox" id="tPencil" checked> 手指只移動</label>
     <button class="hbtn" id="tSave">💾</button>
   </div>
-  <div id="tArea"><div id="tStage"><img id="tRef" alt=""><canvas id="tInk"></canvas></div>
-    <div class="tempty">在三星平板用 S Pen「智慧型選取」框一塊區域（或截圖），<br>圖片就會傳到這裡。</div></div>
+  <div id="tArea"><div id="tStage"><img id="tRef" alt=""><canvas id="tInk"></canvas><div id="tSel"></div></div>
+    <div class="tempty">按上方「📸 擷取平板」，或在三星平板截圖（電源鍵＋音量下），<br>圖片就會傳到這裡；再用「✂️ 裁切」框出要描的部分。</div></div>
   <div id="tSaveBox"><div><p>長按圖片 → 儲存影像</p><label class="tl"><input type="checkbox" id="tSaveRef"> 包含原圖</label><img id="tSaved" alt=""></div></div>
 </div>
 
@@ -1591,7 +1595,7 @@ function onImageEnd() {
   IMG.buf = null;
   history.unshift(url); if (history.length > 8) URL.revokeObjectURL(history.pop());
   $('bTrace').classList.remove('busy'); $('bTrace').classList.add('new'); delete $('bTrace').dataset.pct;
-  if (trace.classList.contains('show')) setRef(url); else { pendingRef = url; toast('🎨 收到新圖片，打開「描圖」就能描', 3000); }
+  if (trace.classList.contains('show')) { setCrop(false); setRef(url); } else { pendingRef = url; toast('🎨 收到新圖片，打開「描圖」就能描', 3000); }
 }
 
 const trace = $('trace'), stage = $('tStage'), ref = $('tRef'), ink = $('tInk'), ictx = ink.getContext('2d');
@@ -1630,8 +1634,10 @@ function redraw() { ictx.clearRect(0, 0, ink.width, ink.height); strokes.forEach
 
 // Pencil draws; fingers pan/zoom (or draw too, until a Pencil has been used).
 const tp = new Map(); let cur = null, pinch = null;
+let cropMode = false, cropSel = null;
 $('tArea').addEventListener('pointerdown', (e) => {
   e.preventDefault(); $('tArea').setPointerCapture(e.pointerId);
+  if (cropMode && !tp.size) { const p0 = toStage(e); cropSel = { id: e.pointerId, x0: p0.x, y0: p0.y, x1: p0.x, y1: p0.y }; drawSel(); return; }
   if (e.pointerType === 'pen') penSeen = true;
   const drawWith = e.pointerType === 'pen' || (!penSeen && e.pointerType !== 'touch') || (!penSeen && tp.size === 0 && !$('tPencil').checked);
   if (drawWith && !cur) {
@@ -1647,6 +1653,7 @@ $('tArea').addEventListener('pointerdown', (e) => {
   }
 });
 $('tArea').addEventListener('pointermove', (e) => {
+  if (cropMode && cropSel && cropSel.id === e.pointerId) { const p1 = toStage(e); cropSel.x1 = p1.x; cropSel.y1 = p1.y; drawSel(); return; }
   if (cur && cur.id === e.pointerId) {
     const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
     for (const ev of evs) {
@@ -1666,6 +1673,7 @@ $('tArea').addEventListener('pointermove', (e) => {
   } else if (tp.size === 1) { view.x += e.clientX - prev.x; view.y += e.clientY - prev.y; applyView(); }
 });
 function tEnd(e) {
+  if (cropMode && cropSel && cropSel.id === e.pointerId) { cropSel.id = null; return; }
   if (cur && cur.id === e.pointerId) { if (cur.pts.length > 1) strokes.push(cur); cur = null; return; }
   tp.delete(e.pointerId); if (tp.size < 2) pinch = null;
 }
@@ -1676,7 +1684,7 @@ $('bTrace').onclick = () => {
   if (pendingRef) setRef(pendingRef); else if (!ref.src && history[0]) setRef(history[0]);
   requestAnimationFrame(() => { if (ref.naturalWidth) { fitStage(); redraw(); } });
 };
-$('tClose').onclick = () => trace.classList.remove('show');
+$('tClose').onclick = () => { setCrop(false); trace.classList.remove('show'); };
 $('tOpacity').oninput = () => { ref.style.opacity = $('tOpacity').value; };
 $('tSize').oninput = () => { pen.size = +$('tSize').value; };
 $('tUndo').onclick = () => { strokes.pop(); redraw(); };
@@ -1691,6 +1699,42 @@ document.querySelectorAll('#trace .sw').forEach((b) => b.onclick = () => {
   pen.color = b.dataset.c; pen.erase = false; $('tErase').classList.remove('on');
   document.querySelectorAll('#trace .sw').forEach((x) => x.classList.toggle('on', x === b));
 });
+function selRect() {
+  if (!cropSel) return null;
+  const W = ref.naturalWidth, H = ref.naturalHeight;
+  const x = Math.max(0, Math.min(cropSel.x0, cropSel.x1)), y = Math.max(0, Math.min(cropSel.y0, cropSel.y1));
+  const w = Math.min(W, Math.max(cropSel.x0, cropSel.x1)) - x, h = Math.min(H, Math.max(cropSel.y0, cropSel.y1)) - y;
+  return w > 10 && h > 10 ? { x, y, w, h } : null;
+}
+function drawSel() {
+  const r = selRect(), el = $('tSel');
+  if (!r) { el.style.display = 'none'; return; }
+  Object.assign(el.style, { display: 'block', left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' });
+}
+function setCrop(on) {
+  cropMode = on; cropSel = null; drawSel();
+  $('tCrop').classList.toggle('on', on); $('tCropActs').style.display = on ? 'inline' : 'none';
+  if (on) toast('用手指或 Pencil 框出要描的範圍，再按「套用」');
+}
+$('tCrop').onclick = () => { if (!ref.naturalWidth) return toast('還沒有圖片'); setCrop(!cropMode); };
+$('tCropNo').onclick = () => setCrop(false);
+$('tCropOk').onclick = () => {
+  const r = selRect(); if (!r) return toast('先框出一個範圍');
+  if (strokes.length && !confirm('裁切後目前的描線會清除，確定嗎？')) return;
+  const c = document.createElement('canvas'); c.width = Math.round(r.w); c.height = Math.round(r.h);
+  c.getContext('2d').drawImage(ref, r.x, r.y, r.w, r.h, 0, 0, c.width, c.height);
+  c.toBlob((b) => {
+    const url = URL.createObjectURL(b);
+    history.unshift(url); strokes = []; setCrop(false); setRef(url);
+  }, 'image/jpeg', 0.92);
+};
+// Ask the tablet for a screenshot (PrintScreen); the bridge sends it back.
+$('tShot').onclick = () => {
+  if (!authed) return toast('還沒連線');
+  if (info.bridge === false) return toast('三星平板的 PadKey 橋接沒開，圖片傳不回來');
+  send(new Uint8Array([M.TAP, 0, 0x46]));
+  toast('📸 已讓平板截圖，傳送中…（幾秒）', 3000);
+};
 $('tSave').onclick = () => {
   const c = document.createElement('canvas'); c.width = ink.width; c.height = ink.height;
   const x = c.getContext('2d');
