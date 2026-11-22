@@ -246,17 +246,25 @@ body.phone.land #tabs button { height: 40px; flex-direction: row; gap: 6px; }
 .ckeys button { flex: none; height: 42px; min-width: 48px; padding: 0 12px; border-radius: 9px; background: #47474a; color: #fff; font-size: 16px; touch-action: none; }
 .ckeys button.down { background: #9b9ba1; }
 #sidekeys { display: none; }
-body.composing:not(.phone) #sidekeys { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 52px; gap: 8px; width: auto; flex: 1;
+body.composing:not(.phone) #sidekeys { display: grid; width: 330px; flex: none; gap: 8px;
+  grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(3, 1fr);
+  grid-template-areas: "esc tab bs bs" ". up . ent" "lt dn rt ent";
   align-content: start; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 #sidekeys button { border-radius: 9px; background: #47474a; color: #fff; font-size: 16px; touch-action: none; }
 #sidekeys button.down { background: #9b9ba1; }
 #sidekeys button.wide { grid-column: span 2; }
 #sidekeys .csep { display: none; }
-/* typing Chinese: no trackpad, keys get the space */
-body.composing .padwrap { display: none !important; }
-body.composing:not(.phone) main { padding: 4px 12px 8px; }
+/* typing Chinese (iPad): small trackpad + key cluster, big text box */
+body.phone.composing .padwrap { display: none !important; }
+body.composing:not(.phone) header { display: none; }
+body.composing:not(.phone) main { padding: 8px 12px 6px; min-height: 120px; }
+body.composing:not(.phone) .padwrap { width: auto !important; flex: 1; }
 #sidekeys button { font-size: 18px; }
-body.composing #ctext { height: 48px; min-height: 0; padding: 8px 12px; }
+.cwrap { position: relative; }
+#ctext { overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 34px !important; }
+body.composing:not(.phone) #ctext { height: 132px; font-size: 20px; line-height: 1.45; }
+.cbar { position: absolute; right: 4px; top: 4px; bottom: 4px; width: 24px; border-radius: 12px; background: rgba(255,255,255,.07); touch-action: none; }
+.cthumb { position: absolute; left: 3px; right: 3px; top: 0; height: 40px; border-radius: 9px; background: rgba(0,240,255,.55); }
 body.composing #compose { padding-top: 8px; }
 body.composing .crow { margin-top: 6px; }
 body:not(.phone) .ckeys { display: none; }
@@ -384,7 +392,7 @@ body.phone #bZh, body.phone #bTrace { padding: 0 8px; font-size: 13px; }
 </div></div>
 
 <div id="compose">
-  <textarea id="ctext" rows="1" placeholder="用 iPad 的注音鍵盤打字，按「送出」貼到三星平板" autocomplete="off" spellcheck="false"></textarea>
+  <div class="cwrap"><textarea id="ctext" rows="4" placeholder="用 iPad 的注音鍵盤打字，按「送出」貼到三星平板" autocomplete="off" spellcheck="false"></textarea><div class="cbar" id="cbar"><div class="cthumb" id="cthumb"></div></div></div>
   <div class="ckeys" id="ckeys"></div>
   <div class="crow">
     <label><input type="checkbox" id="cEnter"> Return 直接送出</label>
@@ -1466,7 +1474,7 @@ $('bUnpair').onclick = () => {
 // Safety: never leave keys stuck when the app goes to the background.
 document.addEventListener('visibilitychange', () => { if (document.hidden) send(new Uint8Array([M.RELEASE])); });
 document.addEventListener('gesturestart', (e) => e.preventDefault());
-document.addEventListener('touchmove', (e) => { if (!e.target.closest('#fx, .card, #strip, #touchbar, .ckeys, #sidekeys')) e.preventDefault(); }, { passive: false });
+document.addEventListener('touchmove', (e) => { if (!e.target.closest('#fx, .card, #strip, #touchbar, .ckeys, #sidekeys, #compose')) e.preventDefault(); }, { passive: false });
 
 const isPhone = Math.min(screen.width, screen.height) < 600;
 function setTab(t) {
@@ -1508,10 +1516,11 @@ if (mode === 'ble') $('wifiSec').style.display = 'none';
 // ------------------------------------------------------------ 中文送字 (iPad keyboard -> host clipboard paste)
 const compose = $('compose'), ctext = $('ctext');
 function openCompose() {
-  compose.classList.add('show'); document.body.classList.add('composing');
+  compose.classList.add('show'); document.body.classList.add('composing'); setTimeout(syncBar, 50);
   if (info.bridge === false) toast('三星平板的 PadKey 橋接程式沒有在執行，中文送不過去', 4000);
   ctext.focus();
 }
+function closeCompose_() {}
 function closeCompose() { compose.classList.remove('show'); document.body.classList.remove('composing'); ctext.blur(); }
 $('bZh').onclick = () => (compose.classList.contains('show') ? closeCompose() : openCompose());
 $('cClose').onclick = closeCompose;
@@ -1530,33 +1539,31 @@ async function sendCompose() {
   if (!v) return;
   if (!authed) return toast('還沒連線');
   $('cSend').disabled = true;
-  enqueueText(v); ctext.value = '';
+  enqueueText(v); ctext.value = ''; syncBar();
   $('cSend').disabled = false;
   ctext.focus();
 }
 // Keys for the tablet while typing Chinese with the iPad keyboard. Held = key held
 // (so the tablet auto-repeats). They queue behind any text still being pasted.
-const CKEYS = [
+const CKEYS_ALL = [
   ['⏎ Enter', 0, 0x28], ['⌫', 0, 0x2A], ['Del', 0, 0x4C], ['空白', 0, 0x2C], ['Tab', 0, 0x2B], ['Esc', 0, 0x29], null,
   ['←', 0, 0x50], ['→', 0, 0x4F], ['↑', 0, 0x52], ['↓', 0, 0x51], ['Home', 0, 0x4A], ['End', 0, 0x4D], null,
   ['⇧←', 2, 0x50], ['⇧→', 2, 0x4F], ['全選', 1, 0x04], null,
   ['複製', 1, 0x06], ['剪下', 1, 0x1B], ['貼上', 1, 0x19], ['復原', 1, 0x1D], ['重做', 3, 0x1D], ['刪詞', 1, 0x2A],
 ];
 const MODKEYS = [[1, 0xE0], [2, 0xE1], [4, 0xE2], [8, 0xE3]];
+const CKEYS = [['Esc', 0, 0x29], ['Tab', 0, 0x2B], ['⌫', 0, 0x2A], ['←', 0, 0x50], ['↑', 0, 0x52], ['↓', 0, 0x51], ['→', 0, 0x4F], ['⏎ Enter', 0, 0x28]];
 // Side panel next to the trackpad: most-used first.
-const SIDEKEYS = [
-  ['⏎ Enter', 0, 0x28], ['⌫', 0, 0x2A],
-  ['←', 0, 0x50], ['→', 0, 0x4F], ['↑', 0, 0x52], ['↓', 0, 0x51],
-  ['空白', 0, 0x2C], ['全選', 1, 0x04], ['複製', 1, 0x06], ['貼上', 1, 0x19],
-  ['復原', 1, 0x1D], ['剪下', 1, 0x1B], ['Tab', 0, 0x2B], ['Esc', 0, 0x29],
-  ['Home', 0, 0x4A], ['End', 0, 0x4D], ['⇧←', 2, 0x50], ['⇧→', 2, 0x4F],
-  ['Del', 0, 0x4C], ['刪詞', 1, 0x2A], ['重做', 3, 0x1D],
+const SIDEKEYS = [            // [label, mods, usage, grid-area]
+  ['Esc', 0, 0x29, 'esc'], ['Tab', 0, 0x2B, 'tab'], ['⌫', 0, 0x2A, 'bs'],
+  ['↑', 0, 0x52, 'up'], ['⏎ Enter', 0, 0x28, 'ent'],
+  ['←', 0, 0x50, 'lt'], ['↓', 0, 0x51, 'dn'], ['→', 0, 0x4F, 'rt'],
 ];
 for (const box of [$('ckeys'), $('sidekeys')]) for (const k of (box.id === 'sidekeys' ? SIDEKEYS : CKEYS)) {
   if (!k) { const sp = document.createElement('div'); sp.className = 'csep'; box.appendChild(sp); continue; }
   const [lab, mods, u] = k, b = document.createElement('button');
   b.textContent = lab;
-  if (box.id === 'sidekeys' && !mods && (u === 0x28 || u === 0x2A)) b.className = 'wide';   // big Enter / Backspace
+  if (box.id === 'sidekeys' && k[3]) b.style.gridArea = k[3];   // big Enter / Backspace
   b.addEventListener('mousedown', (e) => e.preventDefault());       // keep the iPad keyboard up
   b.addEventListener('pointerdown', (e) => {
     e.preventDefault(); b.setPointerCapture(e.pointerId); b.classList.add('down');
@@ -1573,6 +1580,27 @@ for (const box of [$('ckeys'), $('sidekeys')]) for (const k of (box.id === 'side
   b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up);
   box.appendChild(b);
 }
+// Draggable scroll bar for the text box (iOS hides native scroll bars).
+function syncBar() {
+  const t = ctext, bar = $('cbar'), th = $('cthumb');
+  const ratio = t.clientHeight / Math.max(t.scrollHeight, 1);
+  bar.style.display = ratio >= 1 ? 'none' : 'block';
+  const h = Math.max(30, bar.clientHeight * ratio);
+  th.style.height = h + 'px';
+  th.style.top = ((bar.clientHeight - h) * (t.scrollTop / Math.max(t.scrollHeight - t.clientHeight, 1))) + 'px';
+}
+ctext.addEventListener('scroll', syncBar); ctext.addEventListener('input', syncBar);
+$('cbar').addEventListener('pointerdown', (e) => {
+  e.preventDefault(); $('cbar').setPointerCapture(e.pointerId);
+  const move = (ev) => {
+    const r = $('cbar').getBoundingClientRect();
+    const f = Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height));
+    ctext.scrollTop = f * (ctext.scrollHeight - ctext.clientHeight); syncBar();
+  };
+  move(e);
+  $('cbar').onpointermove = move;
+  $('cbar').onpointerup = $('cbar').onpointercancel = () => { $('cbar').onpointermove = null; };
+});
 $('cSendEnter').addEventListener('mousedown', (e) => e.preventDefault());
 $('cSendEnter').onclick = async () => { await sendCompose(); send(new Uint8Array([M.TAP, 0, 0x28])); };
 $('cSend').addEventListener('mousedown', (e) => e.preventDefault());   // keep the iPad keyboard up
@@ -1581,7 +1609,7 @@ ctext.addEventListener('keydown', (e) => {
   // Return sends — but not while the Zhuyin keyboard is still choosing characters.
   if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229 && $('cEnter').checked) { e.preventDefault(); sendCompose(); }
 });
-$('cEnter').checked = localStorage.padkeyEnterSend !== '0';
+$('cEnter').checked = localStorage.padkeyEnterSend === '1';   // default off: Return = new line
 $('cEnter').onchange = () => { localStorage.padkeyEnterSend = $('cEnter').checked ? '1' : '0'; };
 function onUtextStatus(s) {
   if (s === 'nobridge' || s === 'pasted') { if (pasteWait) pasteWait(); }
