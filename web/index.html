@@ -256,13 +256,14 @@ body.composing:not(.phone) #sidekeys { display: grid; width: 330px; flex: none; 
 #sidekeys .csep { display: none; }
 /* typing Chinese (iPad): small trackpad + key cluster, big text box */
 body.phone.composing .padwrap { display: none !important; }
-body.composing:not(.phone) header { display: none; }
+body.composing:not(.phone) header { height: 42px; padding: 4px 12px; }
+body.composing:not(.phone) header .hbtn { height: 32px; }
 body.composing:not(.phone) main { padding: 8px 12px 6px; min-height: 120px; }
 body.composing:not(.phone) .padwrap { width: auto !important; flex: 1; }
 #sidekeys button { font-size: 18px; }
 .cwrap { position: relative; }
 #ctext { overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 34px !important; }
-body.composing:not(.phone) #ctext { height: 132px; font-size: 20px; line-height: 1.45; }
+body.composing:not(.phone) #ctext { height: 116px; font-size: 20px; line-height: 1.45; }
 .cbar { position: absolute; right: 4px; top: 4px; bottom: 4px; width: 24px; border-radius: 12px; background: rgba(255,255,255,.07); touch-action: none; }
 .cthumb { position: absolute; left: 3px; right: 3px; top: 0; height: 40px; border-radius: 9px; background: rgba(0,240,255,.55); }
 body.composing #compose { padding-top: 8px; }
@@ -318,7 +319,7 @@ body.phone #bZh, body.phone #bTrace { padding: 0 8px; font-size: 13px; }
   <span id="st" class="pill bad">未連線</span>
   <span id="usb" class="pill">USB</span>
   <div class="spacer"></div>
-  <button class="hbtn" id="bZh">✍️ 中文</button>
+  <button class="hbtn" id="bZh">✍️ 整串輸入</button>
   <button class="hbtn" id="bTrace">🎨 描圖</button>
   <button class="hbtn" id="bSys" style="display:none">🍎 iPad 鍵盤</button>
   <button class="hbtn" id="bKbd">⌨️ 鍵盤</button>
@@ -453,7 +454,7 @@ body.phone #bZh, body.phone #bTrace { padding: 0 8px; font-size: 13px; }
     <button class="btn ghost" data-k="custom">✏️ 自訂指示…</button>
     <button class="btn" data-k="">取消（用原圖）</button>
   </div></div>
-  <div id="tSaveBox"><div><p>長按圖片 → 儲存影像</p><label class="tl"><input type="checkbox" id="tSaveRef"> 包含原圖</label><img id="tSaved" alt=""></div></div>
+  <div id="tSaveBox"><div><p>長按圖片 → 儲存影像</p><label class="tl"><input type="checkbox" id="tSaveRef" checked> 包含原圖</label><img id="tSaved" alt=""></div></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1916,14 +1917,19 @@ async function aiProcess(prompt) {
     aiBusy = false; $('tAI').classList.remove('busy'); $('tAI').textContent = '✨ AI 整理';
   }
 }
-$('tSave').onclick = () => {
+function renderSave() {
   const c = document.createElement('canvas'); c.width = ink.width; c.height = ink.height;
   const x = c.getContext('2d');
   x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
   if ($('tSaveRef').checked && ref.naturalWidth) { x.globalAlpha = +$('tOpacity').value; x.drawImage(ref, 0, 0, c.width, c.height); x.globalAlpha = 1; }
   x.drawImage(ink, 0, 0);
-  $('tSaved').src = c.toDataURL('image/png'); $('tSaveBox').classList.add('show');
+  $('tSaved').src = c.toDataURL('image/png');
+}
+$('tSave').onclick = () => {
+  if (!ref.naturalWidth && !strokes.length) return toast('還沒有圖片或描線');
+  renderSave(); $('tSaveBox').classList.add('show');
 };
+$('tSaveRef').onchange = renderSave;
 $('tSaveBox').onclick = (e) => { if (e.target.id === 'tSaveBox') $('tSaveBox').classList.remove('show'); };
 addEventListener('resize', () => { if (trace.classList.contains('show') && ref.naturalWidth) fitStage(); });
 
