@@ -75,8 +75,46 @@ class Link:
                 return
 
 
+class NativeClipboard:
+    """A long-lived native Termux shell (over the local sshd) that sets the
+    clipboard, avoiding proot's per-command startup cost."""
+
+    KEY = os.path.expanduser("~/.ssh/padkey_build")
+
+    def __init__(self):
+        self.p = None
+
+    def _start(self):
+        self.p = subprocess.Popen(
+            ["ssh", "-i", self.KEY, "-p", "8022", "-o", "BatchMode=yes", "localhost", "bash"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+
+    def set(self, text):
+        import base64
+        for _ in range(2):
+            try:
+                if not self.p or self.p.poll() is not None:
+                    self._start()
+                b64 = base64.b64encode(text.encode()).decode()
+                self.p.stdin.write(f"echo {b64} | base64 -d | termux-clipboard-set; echo __done__\n".encode())
+                self.p.stdin.flush()
+                while True:
+                    line = self.p.stdout.readline()
+                    if not line:
+                        raise RuntimeError("native shell closed")
+                    if line.strip() == b"__done__":
+                        return
+            except Exception as e:
+                log("native clipboard failed:", e)
+                self.p = None
+        subprocess.run([TERMUX_BIN + "/termux-clipboard-set"], input=text.encode(), timeout=10, check=True)
+
+
+CLIP = NativeClipboard()
+
+
 def set_clipboard(text):
-    subprocess.run([TERMUX_BIN + "/termux-clipboard-set"], input=text.encode(), timeout=10, check=True)
+    CLIP.set(text)
 
 
 def newest_shot(since):

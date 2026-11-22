@@ -176,12 +176,6 @@ body.phone #touchbar { display: none; }
 .tb { flex: none; height: 44px; padding: 0 12px; border-radius: 8px; background: #1c1c1f; font-size: 19px; position: relative; overflow: hidden;
   display: flex; align-items: center; justify-content: center; gap: 6px; touch-action: pan-x; }
 .tb small { font-size: 12px; color: #a3a3b8; }
-.zpre { flex: none; padding: 0 12px; height: 44px; display: flex; align-items: center; border-radius: 8px; background: #2c2c2e;
-  font-size: 22px; color: #fff; border: 1px solid var(--cyan); box-shadow: 0 0 10px rgba(0,240,255,.35); white-space: nowrap; }
-.zwait { color: #888; font-size: 14px; padding: 0 10px; }
-.tb.zc { font-size: 22px; min-width: 52px; padding: 0 14px; color: #fff; }
-.tb.zc.long { color: #ffd7f6; }
-.tb.zc:active { background: #4a4a55; }
 .tb.cand { min-width: 92px; background: #24122e; font-size: 20px; }
 .tb.cand small { color: #ffb8ef; font-size: 13px; }
 .tb-sep { flex: none; width: 1px; height: 26px; background: #34343c; margin: 0 4px; }
@@ -309,12 +303,7 @@ body.phone #bZh, body.phone #bTrace { padding: 0 8px; font-size: 13px; }
   <label class="set">捲動速度 <input type="range" id="sScroll" min="0.3" max="3" step="0.1"></label>
   <label class="set">自然捲動（像 iPad） <input type="checkbox" id="sNatural"></label>
   <label class="set">防誤觸（可以把手放在上面打字） <input type="checkbox" id="sPalm"></label>
-  <label class="set">中文輸入方式
-    <select id="sZh" style="height:36px;border-radius:8px;background:var(--key);color:var(--text);border:1px solid var(--keyb);font-size:15px">
-      <option value="ipad">在 iPad 上選字（推薦）</option>
-      <option value="tablet">用三星平板的輸入法</option>
-    </select></label>
-  <label class="set">🌐 中英切換快捷鍵（平板輸入法用）
+  <label class="set">🌐 中英切換快捷鍵
     <select id="sIme" style="height:36px;border-radius:8px;background:var(--key);color:var(--text);border:1px solid var(--keyb);font-size:15px">
       <option value="ctrl">Ctrl + 空白（Gboard）</option>
       <option value="shift">Shift + 空白（三星鍵盤）</option>
@@ -392,7 +381,7 @@ body.phone #bZh, body.phone #bTrace { padding: 0 8px; font-size: 13px; }
 const $ = (id) => document.getElementById(id);
 
 // ------------------------------------------------------------ settings
-const cfg = Object.assign({ speed: 1.6, accel: 0.8, scroll: 1, natural: true, palm: true, ime: 'ctrl', zhInput: 'ipad' }, JSON.parse(localStorage.padkeyCfg || '{}'));
+const cfg = Object.assign({ speed: 1.6, accel: 0.8, scroll: 1, natural: true, palm: true, ime: 'ctrl' }, JSON.parse(localStorage.padkeyCfg || '{}'));
 const saveCfg = () => localStorage.padkeyCfg = JSON.stringify(cfg);
 
 function toast(msg, ms = 2200) {
@@ -501,7 +490,35 @@ function toBytes(b) {
   if (b instanceof Uint8Array) return new Uint8Array(b);  // copy: queued moves get mutated
   return new Uint8Array(b.slice ? b.slice(0) : b);
 }
+// Keys must not overtake text that is still being pasted (paste takes ~0.5-1.5 s),
+// so while a paste is in flight, keyboard messages wait in this queue.
+const outQ = []; let outBusy = false, pasteWait = null;
+const KEYMSG = new Set([4, 5, 6, 7, 8]);            // KEYDOWN KEYUP TAP TEXT CONSUMER
 function send(bytes) {
+  const first = bytes instanceof Uint8Array ? bytes[0] : new Uint8Array(bytes)[0];
+  if ((outBusy || outQ.length) && KEYMSG.has(first)) { outQ.push({ b: bytes }); return; }
+  rawSend(bytes);
+}
+function enqueueText(t) {
+  const last = outQ[outQ.length - 1];
+  if (last && last.t !== undefined) last.t += t; else outQ.push({ t });   // consecutive text merges
+  pumpOut();
+}
+async function pumpOut() {
+  if (outBusy) return;
+  outBusy = true;
+  while (outQ.length) {
+    const a = outQ.shift();
+    if (a.b) { rawSend(a.b); continue; }
+    await new Promise((res) => {
+      pasteWait = res; setTimeout(res, 4000);
+      sendUText(a.t).catch(() => res());
+    });
+    pasteWait = null;
+  }
+  outBusy = false;
+}
+function rawSend(bytes) {
   if (!authed) return;
   if (mode === 'ws') { if (ws && ws.readyState === 1) ws.send(bytes); }
   else bleQueue(toBytes(bytes));
@@ -889,8 +906,7 @@ function renderTouchBar() {
     [['←', 0x50], ['↑', 0x52], ['↓', 0x51], ['→', 0x4F]].forEach(([l, u]) => bar.insertBefore(makeKey([l, 0, u, 'arrow']), $('tbFn')));
   }
   if (fnMode) { fnKeys.forEach((k) => tb.appendChild(k)); return; }
-  if (imeOn() && composing()) { renderComposition(tb); return; }
-  if (zyMode && cfg.zhInput === 'tablet') {
+  if (zyMode) {
     // Zhuyin typed by the tablet's IME: candidate controls first.
     [['◀', '上一個字', 'c2', { tap: [0, 0x50], lbl: '<' }], ['▶', '下一個字', 'c2', { tap: [0, 0x4F], lbl: '>' }],
      ['▼', '更多候選', 'c2', { tap: [0, 0x51], lbl: 'MORE' }], ['✓', '選定', 'c4', { tap: [0, 0x28], lbl: 'OK' }],
@@ -1057,115 +1073,15 @@ function makeKey(def) {
   return el;
 }
 
-// ------------------------------------------------------------ 注音輸入法（在 iPad 上組字，選好的字貼到平板）
-// Dictionary: libchewing (LGPL-2.1-or-later), see zhuyin-LICENSE.txt.
-const ZH = { dict: null, loading: null, failed: false, syl: [], pend: { i: '', m: '', f: '' }, order: [] };
-const ZI = 'ㄅㄆㄇㄈㄉㄊㄋㄌㄍㄎㄏㄐㄑㄒㄓㄔㄕㄖㄗㄘㄙ', ZM = 'ㄧㄨㄩ', ZF = 'ㄚㄛㄜㄝㄞㄟㄠㄡㄢㄣㄤㄥㄦ', ZT = '˙ˊˇˋ';
-function imeOn() { return cfg.zhInput !== 'tablet' && zyMode && !ZH.failed; }
-function loadDict() {
-  if (ZH.dict || ZH.loading || ZH.failed) return ZH.loading;
-  ZH.loading = fetch('zhuyin.txt').then((r) => { if (!r.ok) throw new Error(r.status); return r.text(); }).then((t) => {
-    const m = new Map();
-    for (const line of t.split('\n')) { const i = line.indexOf('\t'); if (i > 0) m.set(line.slice(0, i), line.slice(i + 1)); }
-    ZH.dict = m; renderTouchBar();
-  }).catch(() => { ZH.failed = true; toast('注音字典載入失敗（需要從 GitHub 網址開啟），改用平板的輸入法'); });
-  return ZH.loading;
-}
-const pendStr = () => ZH.pend.i + ZH.pend.m + ZH.pend.f;
-const composing = () => ZH.syl.length > 0 || pendStr() !== '';
-function words(sylArr) { const v = ZH.dict && ZH.dict.get(sylArr.join(' ')); return v ? v.split(' ') : []; }
-
-// Best conversion of all syllables: prefer long dictionary phrases, then fewer segments.
-function convert(syl) {
-  const n = syl.length, best = [{ s: 0, t: '' }];
-  for (let i = 1; i <= n; i++) {
-    best[i] = { s: -1e9, t: '' };
-    for (let L = 1; L <= Math.min(6, i); L++) {
-      const w = words(syl.slice(i - L, i));
-      let seg, sc;
-      if (w.length) { seg = w[0]; sc = (L > 1 ? 3 * L : 0) - 1; }
-      else if (L === 1) { seg = syl[i - 1]; sc = -20; }      // unknown syllable: keep the zhuyin
-      else continue;
-      if (best[i - L].s + sc > best[i].s) best[i] = { s: best[i - L].s + sc, t: best[i - L].t + seg };
-    }
-  }
-  return best[n].t;
-}
-function candidates() {
-  const out = [], seen = new Set();
-  const add = (w, n) => { if (!seen.has(w)) { seen.add(w); out.push([w, n]); } };
-  const n = ZH.syl.length;
-  if (n > 1) add(convert(ZH.syl), n);
-  for (let L = Math.min(6, n); L >= 1; L--) for (const w of words(ZH.syl.slice(0, L)).slice(0, L === 1 ? 60 : 12)) add(w, L);
-  return out;
-}
-
-async function commitText(t) {
-  if (!t) return;
-  if (info.bridge === false) toast('三星平板的 PadKey 橋接沒開，中文送不過去（到控制台打開）', 3500);
-  label('ZH ' + t.length, C565.yellow);
-  try { await sendUText(t); } catch (e) { toast('送字失敗：' + errText(e)); }
-}
-function zhReset() { ZH.syl = []; ZH.pend = { i: '', m: '', f: '' }; ZH.order = []; }
-function zhCommitAll() {
-  if (pendStr()) zhTone('');
-  const t = convert(ZH.syl); zhReset(); renderTouchBar(); return commitText(t);
-}
-function zhTone(t) {            // finish the current syllable ('' = first tone)
-  if (!pendStr()) return false;
-  ZH.syl.push(pendStr() + t); ZH.pend = { i: '', m: '', f: '' }; ZH.order = [];
-  return true;
-}
-function zhPick(w, n) { ZH.syl.splice(0, n); if (!ZH.syl.length && !pendStr()) zhReset(); renderTouchBar(); commitText(w); }
-
-// Returns true if the key was consumed by the input method.
-function zhKey(sym) {
-  if (ZT.includes(sym)) { if (zhTone(sym === '˙' ? '˙' : sym)) { renderTouchBar(); } return true; }
-  const slot = ZI.includes(sym) ? 'i' : ZM.includes(sym) ? 'm' : ZF.includes(sym) ? 'f' : null;
-  if (!slot) return false;
-  ZH.pend[slot] = sym; ZH.order = ZH.order.filter((s) => s !== slot).concat(slot);
-  renderTouchBar(); return true;
-}
-function zhSpecial(k) {         // space / ret / bs while composing
-  if (!composing()) return false;
-  if (k === 'space') { if (!zhTone('')) zhCommitAll(); else renderTouchBar(); return true; }
-  if (k === 'ret') { zhCommitAll(); return true; }
-  if (k === 'bs') {
-    if (pendStr()) { const s = ZH.order.pop(); if (s) ZH.pend[s] = ''; }
-    else ZH.syl.pop();
-    renderTouchBar(); return true;
-  }
-  return false;
-}
-function renderComposition(tb) {
-  const pre = document.createElement('div'); pre.className = 'zpre';
-  pre.textContent = (ZH.dict ? convert(ZH.syl) : ZH.syl.join('')) + pendStr() || '…';
-  pre.addEventListener('mousedown', (e) => e.preventDefault());
-  pre.addEventListener('click', () => zhCommitAll());   // tap the composition to send it
-  tb.appendChild(pre);
-  if (!ZH.dict) { const w = document.createElement('div'); w.className = 'zwait'; w.textContent = '字典載入中…'; tb.appendChild(w); return; }
-  for (const [w, n] of candidates()) {
-    const b = document.createElement('button'); b.className = 'tb zc' + (n > 1 && w.length === n ? ' long' : '');
-    b.textContent = w;
-    let sx = 0;
-    b.addEventListener('mousedown', (e) => e.preventDefault());
-    b.addEventListener('pointerdown', (e) => { sx = e.clientX; });
-    b.addEventListener('pointerup', (e) => { if (Math.abs(e.clientX - sx) < 12) zhPick(w, n); });
-    tb.appendChild(b);
-  }
-}
-
 // 🌐: switch the tablet's input method AND the on-screen Zhuyin labels together.
 const IME_KEYS = { ctrl: [1, 0x2C], shift: [2, 0x2C], altshift: [4, 0xE1], none: null };
 function switchIme() {
-  if (composing()) zhCommitAll();
-  const k = cfg.zhInput === 'tablet' ? IME_KEYS[cfg.ime] : null;
+  const k = IME_KEYS[cfg.ime];
   if (k) {
     if (k[1] === 0xE1) { send(new Uint8Array([M.KEYDOWN, 0xE2])); send(new Uint8Array([M.KEYDOWN, 0xE1])); send(new Uint8Array([M.KEYUP, 0xE1])); send(new Uint8Array([M.KEYUP, 0xE2])); }
     else send(new Uint8Array([M.TAP, k[0], k[1]]));
   }
   setZy(!zyMode, true);
-  if (zyMode && cfg.zhInput !== 'tablet') loadDict();
   label(zyMode ? 'ZHUYIN' : 'ENGLISH', C565.yellow);
 }
 function clearLatched() {
@@ -1225,7 +1141,7 @@ function typeChar(c) {
   const [u, sh] = cu;
   let mods = 0; for (const m of latched.keys()) mods |= modBit(m);
   if (sh) mods |= K.SHIFT;
-  const wrap = cfg.zhInput === 'tablet' && zyMode && !sh && !mods && IME_KEYS[cfg.ime];
+  const wrap = zyMode && !sh && !mods && IME_KEYS[cfg.ime];
   if (wrap) sendImeToggle();
   send(new Uint8Array([M.TAP, mods, u]));
   if (wrap) sendImeToggle();
@@ -1239,17 +1155,6 @@ function sendImeToggle() {
 function pressNative(key, flick) {
   const mods = [...latched.keys()];
   let modBits = 0; for (const m of mods) modBits |= modBit(m);
-  if (imeOn() && !mods.length && key.u) {
-    if (flick) {                                       // flick symbol: commit first, then type/paste it
-      const fl = key.fl || key.f;
-      const go = () => (/^[\x20-\x7e]$/.test(fl) ? typeChar(fl) : commitText(fl));
-      if (composing()) zhCommitAll().then(go); else go();
-    } else if (!zhKey(key.l)) {                        // punctuation like 「 」 。
-      const t = key.l; if (composing()) zhCommitAll().then(() => commitText(t)); else commitText(t);
-    }
-    lastKeyAt = performance.now();
-    return;
-  }
   if (flick && key.f) { typeChar(key.f); label(key.f, C565.pink); }
   else if (key.u) {                                   // Zhuyin key: raw usage
     send(new Uint8Array([M.TAP, modBits | (key.mods || 0), key.u]));
@@ -1268,7 +1173,6 @@ function pressNative(key, flick) {
 }
 
 function specialAction(k, el) {
-  if (imeOn() && zhSpecial(k)) return;
   switch (k) {
     case 'globe': case 'abc': kbdPage = null; switchIme(); break;
     case 'num': case 'num123': kbdPage = 'num'; buildNativeKbd(); break;
@@ -1380,7 +1284,6 @@ function buildKbd() {
 buildKbd();
 renderFx();
 setZy.init = true; setZy(zyMode, true);
-if (zyMode && cfg.zhInput !== 'tablet') loadDict();
 
 function setKbd(on) {
   document.body.classList.toggle('nokbd', !on);
@@ -1438,7 +1341,6 @@ function bindRange(id, key) {
 }
 bindRange('sSpeed', 'speed'); bindRange('sAccel', 'accel'); bindRange('sScroll', 'scroll');
 $('sPalm').checked = cfg.palm; $('sPalm').onchange = () => { cfg.palm = $('sPalm').checked; saveCfg(); };
-$('sZh').value = cfg.zhInput; $('sZh').onchange = () => { cfg.zhInput = $('sZh').value; saveCfg(); zhReset(); renderTouchBar(); };
 $('sIme').value = cfg.ime; $('sIme').onchange = () => { cfg.ime = $('sIme').value; saveCfg(); };
 $('sNatural').checked = cfg.natural; $('sNatural').onchange = () => { cfg.natural = $('sNatural').checked; saveCfg(); };
 $('bSet').onclick = () => {
@@ -1558,7 +1460,7 @@ async function sendCompose() {
   if (!v) return;
   if (!authed) return toast('還沒連線');
   $('cSend').disabled = true;
-  try { await sendUText(v); ctext.value = ''; } catch (e) { toast('送出失敗：' + e.message); }
+  enqueueText(v); ctext.value = '';
   $('cSend').disabled = false;
   ctext.focus();
 }
@@ -1571,6 +1473,7 @@ ctext.addEventListener('keydown', (e) => {
 $('cEnter').checked = localStorage.padkeyEnterSend !== '0';
 $('cEnter').onchange = () => { localStorage.padkeyEnterSend = $('cEnter').checked ? '1' : '0'; };
 function onUtextStatus(s) {
+  if (s === 'nobridge' || s === 'pasted') { if (pasteWait) pasteWait(); }
   if (s === 'nobridge') toast('三星平板的 PadKey 橋接程式沒有在執行，中文送不過去', 4000);
   else if (s === 'pasted') { $('cStatus').textContent = '✓ 已貼上'; clearTimeout(onUtextStatus.t); onUtextStatus.t = setTimeout(() => $('cStatus').textContent = '', 1500); }
 }
