@@ -414,6 +414,7 @@ body.phone #bZh, body.phone #bTrace { padding: 0 8px; font-size: 13px; }
   <div class="ckeys" id="ckeys"></div>
   <div class="crow">
     <label><input type="checkbox" id="cEnter"> Return 直接送出</label>
+    <label><input type="checkbox" id="cShiftNL"> 換行用 Shift+Enter（聊天 App 不會被送出）</label>
     <span id="cStatus"></span>
     <span class="spacer"></span>
     <button class="hbtn" id="cClose">收起</button>
@@ -1568,7 +1569,16 @@ async function sendCompose() {
   if (!v) { ctext.value = ''; return; }
   if (!authed) return toast('還沒連線');
   $('cSend').disabled = true;
-  enqueueText(v); ctext.value = ''; syncBar();
+  // Chat apps send the message when a pasted line break arrives, so paste line by
+  // line and press Shift+Enter (new line, don't send) between them.
+  if (localStorage.padkeyShiftNL !== '0') {
+    const lines = v.split(/\r?\n/);
+    lines.forEach((ln, i) => {
+      if (ln) enqueueText(ln);
+      if (i < lines.length - 1) { outQ.push({ b: new Uint8Array([M.TAP, 2, 0x28]) }); pumpOut(); }
+    });
+  } else enqueueText(v);
+  ctext.value = ''; syncBar();
   $('cSend').disabled = false;
   ctext.focus();
 }
@@ -1639,6 +1649,8 @@ ctext.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229 && $('cEnter').checked) { e.preventDefault(); sendCompose(); }
 });
 $('cEnter').checked = localStorage.padkeyEnterSend === '1';   // default off: Return = new line
+$('cShiftNL').checked = localStorage.padkeyShiftNL !== '0';
+$('cShiftNL').onchange = () => { localStorage.padkeyShiftNL = $('cShiftNL').checked ? '1' : '0'; };
 $('cEnter').onchange = () => { localStorage.padkeyEnterSend = $('cEnter').checked ? '1' : '0'; };
 function onUtextStatus(s) {
   if (s === 'nobridge' || s === 'pasted') { if (pasteWait) pasteWait(); }
