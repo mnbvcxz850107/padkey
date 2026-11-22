@@ -1559,7 +1559,10 @@ function onImageEnd() {
   IMG.buf = null;
   history.unshift(url); if (history.length > 8) URL.revokeObjectURL(history.pop());
   $('bTrace').classList.remove('busy'); $('bTrace').classList.add('new'); delete $('bTrace').dataset.pct;
-  if (trace.classList.contains('show')) { setCrop(false); setRef(url); } else { pendingRef = url; toast('🎨 收到新圖片，打開「描圖」就能描', 3000); }
+  if (trace.classList.contains('show')) {
+    setCrop(false); setRef(url);
+    if (wantCrop) { wantCrop = false; setTimeout(() => setCrop(true), 300); }   // captured from the iPad: crop right away
+  } else { pendingRef = url; toast('🎨 收到新圖片，打開「描圖」就能描', 3000); }
 }
 
 const trace = $('trace'), stage = $('tStage'), ref = $('tRef'), ink = $('tInk'), ictx = ink.getContext('2d');
@@ -1598,7 +1601,7 @@ function redraw() { ictx.clearRect(0, 0, ink.width, ink.height); strokes.forEach
 
 // Pencil draws; fingers pan/zoom (or draw too, until a Pencil has been used).
 const tp = new Map(); let cur = null, pinch = null;
-let cropMode = false, cropSel = null;
+let cropMode = false, cropSel = null, wantCrop = false;
 $('tArea').addEventListener('pointerdown', (e) => {
   e.preventDefault(); $('tArea').setPointerCapture(e.pointerId);
   if (cropMode && !tp.size) { const p0 = toStage(e); cropSel = { id: e.pointerId, x0: p0.x, y0: p0.y, x1: p0.x, y1: p0.y }; drawSel(); return; }
@@ -1697,7 +1700,8 @@ $('tShot').onclick = () => {
   if (!authed) return toast('還沒連線');
   if (info.bridge === false) return toast('三星平板的 PadKey 橋接沒開，圖片傳不回來');
   send(new Uint8Array([M.TAP, 0, 0x46]));
-  toast('📸 已讓平板截圖，傳送中…（幾秒）', 3000);
+  wantCrop = true;
+  toast('📸 已讓平板截圖，傳送中…（幾秒後會直接進入裁切）', 3500);
 };
 $('tSave').onclick = () => {
   const c = document.createElement('canvas'); c.width = ink.width; c.height = ink.height;
