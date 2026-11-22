@@ -222,6 +222,11 @@ body.phone.land #tabs button { height: 40px; flex-direction: row; gap: 6px; }
   -webkit-user-select: text; user-select: text; resize: none; }
 .crow { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 14px; color: var(--dim); }
 #cStatus { color: var(--green); }
+.ckeys { display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 8px; padding-bottom: 2px; scrollbar-width: none; }
+.ckeys::-webkit-scrollbar { display: none; }
+.ckeys button { flex: none; height: 42px; min-width: 48px; padding: 0 12px; border-radius: 9px; background: #47474a; color: #fff; font-size: 16px; touch-action: none; }
+.ckeys button.down { background: #9b9ba1; }
+.ckeys .csep { flex: none; width: 1px; background: #444; margin: 6px 2px; }
 body.composing #kbd { display: none !important; }
 /* ---------- 描圖 ---------- */
 #bTrace.new::after { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--pink); margin-left: 6px; box-shadow: 0 0 8px var(--pink); }
@@ -342,12 +347,14 @@ body.phone #bZh, body.phone #bTrace { padding: 0 8px; font-size: 13px; }
 
 <div id="compose">
   <textarea id="ctext" rows="2" placeholder="用 iPad 的注音鍵盤打字，按「送出」貼到三星平板" autocomplete="off" spellcheck="false"></textarea>
+  <div class="ckeys" id="ckeys"></div>
   <div class="crow">
     <label><input type="checkbox" id="cEnter"> Return 直接送出</label>
     <span id="cStatus"></span>
     <span class="spacer"></span>
     <button class="hbtn" id="cClose">收起</button>
-    <button class="hbtn on" id="cSend">送出 ⏎</button>
+    <button class="hbtn" id="cSendEnter">送出＋Enter</button>
+    <button class="hbtn on" id="cSend">送出</button>
   </div>
 </div>
 
@@ -1396,7 +1403,7 @@ $('bUnpair').onclick = () => {
 // Safety: never leave keys stuck when the app goes to the background.
 document.addEventListener('visibilitychange', () => { if (document.hidden) send(new Uint8Array([M.RELEASE])); });
 document.addEventListener('gesturestart', (e) => e.preventDefault());
-document.addEventListener('touchmove', (e) => { if (!e.target.closest('#fx, .card, #strip, #touchbar')) e.preventDefault(); }, { passive: false });
+document.addEventListener('touchmove', (e) => { if (!e.target.closest('#fx, .card, #strip, #touchbar, .ckeys')) e.preventDefault(); }, { passive: false });
 
 const isPhone = Math.min(screen.width, screen.height) < 600;
 function setTab(t) {
@@ -1464,6 +1471,37 @@ async function sendCompose() {
   $('cSend').disabled = false;
   ctext.focus();
 }
+// Keys for the tablet while typing Chinese with the iPad keyboard. Held = key held
+// (so the tablet auto-repeats). They queue behind any text still being pasted.
+const CKEYS = [
+  ['⏎ Enter', 0, 0x28], ['⌫', 0, 0x2A], ['Del', 0, 0x4C], ['空白', 0, 0x2C], ['Tab', 0, 0x2B], ['Esc', 0, 0x29], null,
+  ['←', 0, 0x50], ['→', 0, 0x4F], ['↑', 0, 0x52], ['↓', 0, 0x51], ['Home', 0, 0x4A], ['End', 0, 0x4D], null,
+  ['⇧←', 2, 0x50], ['⇧→', 2, 0x4F], ['全選', 1, 0x04], null,
+  ['複製', 1, 0x06], ['剪下', 1, 0x1B], ['貼上', 1, 0x19], ['復原', 1, 0x1D], ['重做', 3, 0x1D], ['刪詞', 1, 0x2A],
+];
+const MODKEYS = [[1, 0xE0], [2, 0xE1], [4, 0xE2], [8, 0xE3]];
+for (const k of CKEYS) {
+  if (!k) { const sp = document.createElement('div'); sp.className = 'csep'; $('ckeys').appendChild(sp); continue; }
+  const [lab, mods, u] = k, b = document.createElement('button');
+  b.textContent = lab;
+  b.addEventListener('mousedown', (e) => e.preventDefault());       // keep the iPad keyboard up
+  b.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); b.setPointerCapture(e.pointerId); b.classList.add('down');
+    for (const [bit, m] of MODKEYS) if (mods & bit) send(new Uint8Array([M.KEYDOWN, m]));
+    send(new Uint8Array([M.KEYDOWN, u]));
+    label(lab.replace(/[^\x20-\x7e]/g, '') || 'KEY', C565.pink);
+  });
+  const up = () => {
+    if (!b.classList.contains('down')) return;
+    b.classList.remove('down');
+    send(new Uint8Array([M.KEYUP, u]));
+    for (const [bit, m] of MODKEYS) if (mods & bit) send(new Uint8Array([M.KEYUP, m]));
+  };
+  b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up);
+  $('ckeys').appendChild(b);
+}
+$('cSendEnter').addEventListener('mousedown', (e) => e.preventDefault());
+$('cSendEnter').onclick = async () => { await sendCompose(); send(new Uint8Array([M.TAP, 0, 0x28])); };
 $('cSend').addEventListener('mousedown', (e) => e.preventDefault());   // keep the iPad keyboard up
 $('cSend').onclick = sendCompose;
 ctext.addEventListener('keydown', (e) => {
