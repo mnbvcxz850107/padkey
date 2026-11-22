@@ -1,0 +1,5 @@
+zhuyin.txt is generated from the libchewing (新酷音) phrase dictionary
+dict/chewing/tsi.csv — https://github.com/chewing/libchewing-data
+Copyright (c) 2025 libchewing Core Team
+Licensed under the GNU Lesser General Public License v2.1 or later (LGPL-2.1-or-later).
+Format: "<bopomofo syllables separated by spaces>\t<phrases, most frequent first>".

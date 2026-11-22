@@ -55,3 +55,6 @@ open(os.path.join(site, "manifest.json"), "wb").write(manifest)
 open(os.path.join(site, "icon.png"), "wb").write(png)
 open(os.path.join(site, "apple-touch-icon.png"), "wb").write(png)
 open(os.path.join(site, ".nojekyll"), "w").close()
+import shutil
+for extra in ("zhuyin.txt", "zhuyin-LICENSE.txt"):
+    shutil.copy(os.path.join(root, "web", extra), os.path.join(site, extra))
