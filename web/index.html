@@ -627,8 +627,8 @@ let S = null;                    // current session
 let lastTap = { t: 0, x: 0, y: 0 };
 const TAP_MS = 280, TAP_SLOP = 12, LONG_MS = 450;
 const TYPING_GUARD_MS = 450;      // like macOS: ignore the trackpad right after typing
-function isPalm(t) { return cfg.palm && ((t.radiusX || 0) > 28 || (t.radiusY || 0) > 28); }
-function typingGuard() { return cfg.palm && (performance.now() - lastKeyAt < TYPING_GUARD_MS || kbdTouches > 0); }
+function isPalm(t) { return false; }  // finger radius on iPad is unreliable; palms are handled by timing/stillness
+function typingGuard() { return cfg.palm && performance.now() - lastKeyAt < TYPING_GUARD_MS; }  // time-based only: can never get stuck
 
 function centroid(tl) {
   let x = 0, y = 0;
@@ -780,6 +780,7 @@ function touchEnd(e) {
   drawFingers([]);
 }
 pad.addEventListener('touchend', touchEnd, { passive: false });
+document.addEventListener('touchend', (e) => { if (!e.touches.length) kbdTouches = 0; }, true);
 pad.addEventListener('touchcancel', touchEnd, { passive: false });
 
 function holdButton(el, bit) {
@@ -993,7 +994,7 @@ function makeKey(def) {
     kbdTouches++;
     el._t0 = performance.now(); el._x = e.clientX; el._y = e.clientY; el._dead = false; el._held = false;
     // Very large contact = palm.
-    if (cfg.palm && (e.width > 50 || e.height > 50)) { el._dead = true; return; }
+    // (No contact-size check: iPad reports large sizes for ordinary fingers.)
     el.classList.add('down');
     if (isGlobe) { el._longT = setTimeout(() => { el._dead = true; setZy(!zyMode); toast('只切換 App 上的注音標示（不送快捷鍵）'); }, 650); return; }
     if (!cfg.palm) {  // classic: act on press
