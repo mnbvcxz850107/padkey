@@ -1535,8 +1535,9 @@ async function sendUText(str) {
   }
 }
 async function sendCompose() {
-  const v = ctext.value;
-  if (!v) return;
+  // Trailing line breaks would act like Enter on the tablet: drop them (inner ones stay).
+  const v = ctext.value.replace(/[\r\n]+$/, '');
+  if (!v) { ctext.value = ''; return; }
   if (!authed) return toast('還沒連線');
   $('cSend').disabled = true;
   enqueueText(v); ctext.value = ''; syncBar();
