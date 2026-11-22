@@ -226,6 +226,18 @@ body.phone.land #tabs button { height: 40px; flex-direction: row; gap: 6px; }
 .ckeys::-webkit-scrollbar { display: none; }
 .ckeys button { flex: none; height: 42px; min-width: 48px; padding: 0 12px; border-radius: 9px; background: #47474a; color: #fff; font-size: 16px; touch-action: none; }
 .ckeys button.down { background: #9b9ba1; }
+#sidekeys { display: none; }
+body.composing:not(.phone) #sidekeys { display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 44px; gap: 6px; width: 380px; flex: none;
+  align-content: start; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+#sidekeys button { border-radius: 9px; background: #47474a; color: #fff; font-size: 16px; touch-action: none; }
+#sidekeys button.down { background: #9b9ba1; }
+#sidekeys button.wide { grid-column: span 2; }
+#sidekeys .csep { display: none; }
+body.composing:not(.phone) .padwrap { width: auto; flex: 1; }
+body:not(.phone) .ckeys { display: none; }
+body.composing:not(.phone) #compose { position: static; order: 4; flex: none; }
+body.composing:not(.phone) #touchbar { display: none; }
+body.composing:not(.phone) main { padding-bottom: 8px; }
 .ckeys .csep { flex: none; width: 1px; background: #444; margin: 6px 2px; }
 body.composing #kbd { display: none !important; }
 /* ---------- 描圖 ---------- */
@@ -281,6 +293,7 @@ body.phone #bZh, body.phone #bTrace { padding: 0 8px; font-size: 13px; }
     <div id="pad"><div class="hint">一指移動 · 輕點＝左鍵 · 兩指輕點＝右鍵 · 兩指捲動／捏合縮放<br>三指拖曳 · 點一下再按住拖曳 · 長按後移動＝拖曳 · 四指滑動＝切換／主畫面／返回</div></div>
     <div class="clicks"><button id="bL">左鍵</button><button id="bM" style="flex:.5">中</button><button id="bR">右鍵</button></div>
   </div>
+  <div id="sidekeys"></div>
   <div id="fx"></div>
 </main>
 
@@ -1403,7 +1416,7 @@ $('bUnpair').onclick = () => {
 // Safety: never leave keys stuck when the app goes to the background.
 document.addEventListener('visibilitychange', () => { if (document.hidden) send(new Uint8Array([M.RELEASE])); });
 document.addEventListener('gesturestart', (e) => e.preventDefault());
-document.addEventListener('touchmove', (e) => { if (!e.target.closest('#fx, .card, #strip, #touchbar, .ckeys')) e.preventDefault(); }, { passive: false });
+document.addEventListener('touchmove', (e) => { if (!e.target.closest('#fx, .card, #strip, #touchbar, .ckeys, #sidekeys')) e.preventDefault(); }, { passive: false });
 
 const isPhone = Math.min(screen.width, screen.height) < 600;
 function setTab(t) {
@@ -1480,10 +1493,20 @@ const CKEYS = [
   ['複製', 1, 0x06], ['剪下', 1, 0x1B], ['貼上', 1, 0x19], ['復原', 1, 0x1D], ['重做', 3, 0x1D], ['刪詞', 1, 0x2A],
 ];
 const MODKEYS = [[1, 0xE0], [2, 0xE1], [4, 0xE2], [8, 0xE3]];
-for (const k of CKEYS) {
-  if (!k) { const sp = document.createElement('div'); sp.className = 'csep'; $('ckeys').appendChild(sp); continue; }
+// Side panel next to the trackpad: most-used first.
+const SIDEKEYS = [
+  ['⏎ Enter', 0, 0x28], ['⌫', 0, 0x2A],
+  ['←', 0, 0x50], ['→', 0, 0x4F], ['↑', 0, 0x52], ['↓', 0, 0x51],
+  ['空白', 0, 0x2C], ['全選', 1, 0x04], ['複製', 1, 0x06], ['貼上', 1, 0x19],
+  ['復原', 1, 0x1D], ['剪下', 1, 0x1B], ['Tab', 0, 0x2B], ['Esc', 0, 0x29],
+  ['Home', 0, 0x4A], ['End', 0, 0x4D], ['⇧←', 2, 0x50], ['⇧→', 2, 0x4F],
+  ['Del', 0, 0x4C], ['刪詞', 1, 0x2A], ['重做', 3, 0x1D],
+];
+for (const box of [$('ckeys'), $('sidekeys')]) for (const k of (box.id === 'sidekeys' ? SIDEKEYS : CKEYS)) {
+  if (!k) { const sp = document.createElement('div'); sp.className = 'csep'; box.appendChild(sp); continue; }
   const [lab, mods, u] = k, b = document.createElement('button');
   b.textContent = lab;
+  if (box.id === 'sidekeys' && (u === 0x28 || u === 0x2A)) b.className = 'wide';   // big Enter / Backspace
   b.addEventListener('mousedown', (e) => e.preventDefault());       // keep the iPad keyboard up
   b.addEventListener('pointerdown', (e) => {
     e.preventDefault(); b.setPointerCapture(e.pointerId); b.classList.add('down');
@@ -1498,7 +1521,7 @@ for (const k of CKEYS) {
     for (const [bit, m] of MODKEYS) if (mods & bit) send(new Uint8Array([M.KEYUP, m]));
   };
   b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up);
-  $('ckeys').appendChild(b);
+  box.appendChild(b);
 }
 $('cSendEnter').addEventListener('mousedown', (e) => e.preventDefault());
 $('cSendEnter').onclick = async () => { await sendCompose(); send(new Uint8Array([M.TAP, 0, 0x28])); };
