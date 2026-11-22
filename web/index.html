@@ -293,6 +293,11 @@ body.composing #kbd { display: none !important; }
 #tSel { position: absolute; display: none; border: 3px dashed var(--yellow); background: rgba(255,230,0,.12); box-shadow: 0 0 0 9999px rgba(0,0,0,.45); pointer-events: none; }
 .tempty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; color: #777; line-height: 1.8; pointer-events: none; }
 #tStage:has(#tRef[src]) + .tempty { display: none; }
+#tAiMenu { display: none; position: absolute; inset: 0; background: rgba(0,0,0,.75); align-items: center; justify-content: center; z-index: 3; }
+#tAiMenu.show { display: flex; }
+#tAiMenu > div { background: #1c1c1e; padding: 16px; border-radius: 14px; width: min(420px, 90vw); }
+#tAiMenu p { color: #bbb; margin: 0 0 8px; font-size: 14px; }
+#tAI.busy { color: var(--yellow); border-color: var(--yellow); }
 #tSaveBox { display: none; position: absolute; inset: 0; background: rgba(0,0,0,.8); align-items: center; justify-content: center; z-index: 2; }
 #tSaveBox.show { display: flex; }
 #tSaveBox > div { background: #1c1c1e; padding: 14px; border-radius: 14px; text-align: center; max-width: 90vw; }
@@ -379,6 +384,19 @@ body.phone #bZh, body.phone #bTrace { padding: 0 8px; font-size: 13px; }
   <button class="btn ghost" id="bForget" style="display:none">改回只用熱點</button>
   </div>
   <hr>
+  <h2>✨ AI 整理描圖（OpenAI）</h2>
+  <p>金鑰只存在<b>這台裝置的瀏覽器</b>，由這台裝置直接送到 OpenAI，不會經過 T-Dongle 或三星平板，也不在網頁程式碼裡。</p>
+  <div><input type="password" id="aiKey" placeholder="OpenAI API 金鑰（sk-…）" autocomplete="off"></div>
+  <label class="set">模型
+    <select id="aiModelSel" style="height:36px;max-width:240px;border-radius:8px;background:var(--key);color:var(--text);border:1px solid var(--keyb);font-size:15px"></select></label>
+  <div id="aiModelBox" style="display:none;margin-top:4px"><input type="text" id="aiModel" placeholder="輸入模型 ID" autocomplete="off" autocapitalize="off"></div>
+  <button class="btn ghost" id="aiList">🔄 用我的金鑰讀取可用的模型</button>
+  <label class="set">品質
+    <select id="aiQuality" style="height:36px;border-radius:8px;background:var(--key);color:var(--text);border:1px solid var(--keyb);font-size:15px">
+      <option value="low">low（便宜、快）</option><option value="medium">medium</option><option value="high">high</option><option value="">不指定</option>
+    </select></label>
+  <button class="btn ghost" id="aiClear">刪除這台裝置上的金鑰</button>
+  <hr>
   <button class="btn ghost" id="bUnpair">取消這台 iPad 的配對</button>
   <button class="btn" id="bClose">完成</button>
   <p id="fwInfo" style="text-align:center"></p>
@@ -418,12 +436,22 @@ body.phone #bZh, body.phone #bTrace { padding: 0 8px; font-size: 13px; }
     <button class="hbtn" id="tPrev">上一張</button>
     <button class="hbtn" id="tShot">📸 擷取平板</button>
     <button class="hbtn" id="tCrop">✂️ 裁切</button>
+    <button class="hbtn" id="tAI">✨ AI 整理</button>
     <span id="tCropActs" style="display:none"><button class="hbtn on" id="tCropOk">套用</button> <button class="hbtn" id="tCropNo">取消</button></span>
     <label class="tl"><input type="checkbox" id="tPencil" checked> 手指只移動</label>
     <button class="hbtn" id="tSave">💾</button>
   </div>
   <div id="tArea"><div id="tStage"><img id="tRef" alt=""><canvas id="tInk"></canvas><div id="tSel"></div></div>
     <div class="tempty">按上方「📸 擷取平板」，或在三星平板截圖（電源鍵＋音量下），<br>圖片就會傳到這裡；再用「✂️ 裁切」框出要描的部分。</div></div>
+  <div id="tAiMenu"><div>
+    <p>把目前的圖交給 AI 整理成好描的版本（約 10–60 秒）：</p>
+    <button class="btn ghost" data-k="line">🖊 線稿（照著描）</button>
+    <button class="btn ghost" data-k="table">📋 表格</button>
+    <button class="btn ghost" data-k="map">🗺 地圖</button>
+    <button class="btn ghost" data-k="text">🔤 文字</button>
+    <button class="btn ghost" data-k="custom">✏️ 自訂指示…</button>
+    <button class="btn" data-k="">取消（用原圖）</button>
+  </div></div>
   <div id="tSaveBox"><div><p>長按圖片 → 儲存影像</p><label class="tl"><input type="checkbox" id="tSaveRef"> 包含原圖</label><img id="tSaved" alt=""></div></div>
 </div>
 
@@ -1782,6 +1810,100 @@ $('tShot').onclick = () => {
   wantCrop = true;
   toast('📸 已讓平板截圖，傳送中…（幾秒後會直接進入裁切）', 3500);
 };
+// ---- AI tidy-up: this device -> OpenAI directly (key kept in this browser only)
+const AI_PROMPTS = {
+  line: 'Convert this image into clean black line art on a pure white background for tracing practice. Keep every important shape, proportion and position exactly as in the original. Remove colors, shading, textures, photos and noise. Use clear, even, medium-weight outlines.',
+  table: 'Redraw this table as a clean black-on-white table for tracing practice: straight ruled grid lines, exactly the same rows, columns and cell contents. Keep the text identical (same language and characters), written in clear, large, legible strokes. No colors or shading.',
+  map: 'Simplify this map into a clean black-on-white tracing template. Keep the main roads, rivers, coastlines, borders and key landmarks in the same positions with their labels; drop minor details, colors, textures and shading. Use clear outlines.',
+  text: 'Rewrite the text in this image as large, clean, high-contrast black characters on a white background, with exactly the same wording, language and line breaks, easy to trace. Remove everything that is not text.',
+};
+const aiCfg = () => ({ key: localStorage.padkeyAiKey || '', model: localStorage.padkeyAiModel || '', quality: localStorage.padkeyAiQuality ?? 'low' });
+$('aiKey').value = aiCfg().key; $('aiModel').value = aiCfg().model; $('aiQuality').value = aiCfg().quality;
+// Model picker: image models this key can use (from /v1/models), or a default list.
+const AI_DEFAULT_MODELS = ['gpt-image-1', 'gpt-image-1-mini', 'dall-e-2'];
+function fillModels(list) {
+  const sel = $('aiModelSel'), cur = aiCfg().model;
+  const all = [...new Set(list.concat(cur && !list.includes(cur) ? [cur] : []))];
+  sel.innerHTML = all.map((m) => `<option value="${m}">${m}</option>`).join('') + '<option value="__custom">自訂…</option>';
+  sel.value = cur && all.includes(cur) ? cur : all[0];
+  if (!cur) { localStorage.padkeyAiModel = sel.value; $('aiModel').value = sel.value; }
+  $('aiModelBox').style.display = 'none';
+}
+fillModels(JSON.parse(localStorage.padkeyAiModels || 'null') || AI_DEFAULT_MODELS);
+$('aiModelSel').onchange = () => {
+  if ($('aiModelSel').value === '__custom') { $('aiModelBox').style.display = 'block'; $('aiModel').focus(); return; }
+  $('aiModelBox').style.display = 'none';
+  localStorage.padkeyAiModel = $('aiModelSel').value; $('aiModel').value = $('aiModelSel').value;
+};
+$('aiList').onclick = async () => {
+  const key = $('aiKey').value.trim() || aiCfg().key;
+  if (!key) return toast('先填入金鑰');
+  try {
+    const r = await fetch('https://api.openai.com/v1/models', { headers: { Authorization: 'Bearer ' + key } });
+    const j = await r.json();
+    if (!r.ok) throw new Error((j.error && j.error.message) || ('HTTP ' + r.status));
+    const ids = j.data.map((m) => m.id).filter((id) => /image|dall-e/i.test(id)).sort().reverse();
+    if (!ids.length) return toast('這把金鑰沒有可用的圖片模型');
+    localStorage.padkeyAiModels = JSON.stringify(ids); fillModels(ids);
+    toast(`找到 ${ids.length} 個圖片模型`);
+  } catch (e) { toast('讀取失敗：' + errText(e), 5000); }
+};
+$('aiKey').onchange = () => { localStorage.padkeyAiKey = $('aiKey').value.trim(); };
+$('aiModel').onchange = () => { localStorage.padkeyAiModel = $('aiModel').value.trim(); fillModels(JSON.parse(localStorage.padkeyAiModels || 'null') || AI_DEFAULT_MODELS); };
+$('aiQuality').onchange = () => { localStorage.padkeyAiQuality = $('aiQuality').value; };
+$('aiClear').onclick = () => { localStorage.removeItem('padkeyAiKey'); $('aiKey').value = ''; toast('已刪除這台裝置上的金鑰'); };
+
+$('tAI').onclick = () => {
+  if (!ref.naturalWidth) return toast('還沒有圖片');
+  if (!aiCfg().key || !aiCfg().model) return toast('先到 ⚙️ 設定填入 OpenAI 金鑰、選好模型', 3500);
+  setCrop(false); $('tAiMenu').classList.add('show');
+};
+document.querySelectorAll('#tAiMenu button').forEach((b) => b.onclick = () => {
+  $('tAiMenu').classList.remove('show');
+  const k = b.dataset.k;
+  if (!k) return;
+  let prompt = AI_PROMPTS[k];
+  if (k === 'custom') { prompt = window.prompt('要 AI 怎麼整理這張圖？（例如：只保留建築物外框，畫成線稿）'); if (!prompt) return; }
+  aiProcess(prompt);
+});
+
+function refAsPng() {
+  const W = ref.naturalWidth, H = ref.naturalHeight, s = Math.min(1, 1536 / Math.max(W, H));
+  const c = document.createElement('canvas'); c.width = Math.round(W * s); c.height = Math.round(H * s);
+  c.getContext('2d').drawImage(ref, 0, 0, c.width, c.height);
+  return new Promise((res) => c.toBlob(res, 'image/png'));
+}
+let aiBusy = false;
+async function aiProcess(prompt) {
+  if (aiBusy) return;
+  const { key, model, quality } = aiCfg();
+  aiBusy = true; $('tAI').classList.add('busy'); $('tAI').textContent = '✨ 處理中…';
+  try {
+    const fd = new FormData();
+    fd.append('model', model);
+    fd.append('prompt', prompt);
+    fd.append('image', await refAsPng(), 'image.png');
+    if (quality) fd.append('quality', quality);
+    const ctl = new AbortController(); const tmo = setTimeout(() => ctl.abort(), 180000);
+    const r = await fetch('https://api.openai.com/v1/images/edits', { method: 'POST', headers: { Authorization: 'Bearer ' + key }, body: fd, signal: ctl.signal });
+    clearTimeout(tmo);
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error((j.error && j.error.message) || ('HTTP ' + r.status));
+    const d = j.data && j.data[0];
+    let blob;
+    if (d && d.b64_json) blob = await (await fetch('data:image/png;base64,' + d.b64_json)).blob();
+    else if (d && d.url) blob = await (await fetch(d.url)).blob();
+    else throw new Error('沒有收到圖片');
+    if (strokes.length && !confirm('AI 整理好了。換成新圖會清除目前的描線，確定嗎？（原圖可用「上一張」找回）')) return;
+    const url = URL.createObjectURL(blob);
+    history.unshift(url); strokes = []; setRef(url);
+    toast('✨ AI 整理完成（原圖在「上一張」）', 3000);
+  } catch (e) {
+    toast('AI 整理失敗：' + (e.name === 'AbortError' ? '超過 3 分鐘沒有回應' : errText(e)), 6000);
+  } finally {
+    aiBusy = false; $('tAI').classList.remove('busy'); $('tAI').textContent = '✨ AI 整理';
+  }
+}
 $('tSave').onclick = () => {
   const c = document.createElement('canvas'); c.width = ink.width; c.height = ink.height;
   const x = c.getContext('2d');
