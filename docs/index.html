@@ -159,14 +159,20 @@ body.phone .pill { font-size: 11px; padding: 3px 8px; }
 body.phone #pad .hint { font-size: 13px; padding: 0 16px; }
 
 /* ---------- MacBook-style iPad layout: Touch Bar / keyboard / trackpad ---------- */
-#touchbar { display: flex; gap: 6px; align-items: center; margin: 0; padding: 6px 8px; height: 58px; flex: none; order: 2; border-radius: 0;
+#touchbar { display: flex; gap: 6px; align-items: center; margin: 0; padding: 6px 8px; height: 58px; flex: none; order: 1; border-radius: 0;
   background: #000; border-radius: 14px; border: 1px solid #1f1f24; box-shadow: 0 0 18px rgba(255,43,214,.12), 0 0 18px rgba(0,240,255,.08); }
 header { order: 0; }
-body:not(.phone) #kbd { order: 3; display: block; }
-body:not(.phone).nokbd #touchbar { order: 3; }
+body:not(.phone) #kbd { order: 2; display: block; }
+/* (touch bar stays on top) */
 body:not(.phone).nokbd #kbd { display: none; }
-body:not(.phone) main { order: 1; justify-content: center; flex-direction: row !important; padding-bottom: 8px; }
-body:not(.phone) .padwrap { flex: none; width: min(800px, 74%); }
+body:not(.phone) main { order: 3; justify-content: center; flex-direction: row !important; padding: 10px 10px 12px; background: #1b1b1e; }
+/* trackpad under the keyboard, centred, about a third of its width (like the keyboard case) */
+body:not(.phone) .padwrap { flex: none; width: max(340px, 36%); }
+body:not(.phone).nokbd .padwrap { width: min(800px, 74%); }
+body:not(.phone):not(.nokbd):not(.composing) main { align-items: flex-start; }
+body:not(.phone):not(.nokbd):not(.composing) #pad { flex: none; aspect-ratio: 1.8 / 1; max-height: 100%; }
+body:not(.phone):not(.nokbd):not(.composing) #pad .hint { font-size: 12px; padding: 0 10px; }
+body:not(.phone).nokbd main { background: none; }
 body:not(.phone) .clicks { display: none; }
 body:not(.phone) #fx { display: none; }
 body.phone #touchbar { display: none; }
@@ -262,7 +268,7 @@ body.composing:not(.phone) #sidekeys { display: grid; width: 330px; flex: none; 
 /* typing Chinese (iPad): small trackpad + key cluster, big text box */
 body.phone.composing .padwrap { display: none !important; }
 
-body.composing:not(.phone) main { padding: 8px 12px 6px; min-height: 120px; }
+body.composing:not(.phone) main { padding: 8px 12px 6px; min-height: 120px; background: none; }
 body.composing:not(.phone) .padwrap { width: auto !important; flex: 1; }
 #sidekeys button { font-size: 18px; }
 .cwrap { position: relative; }
@@ -313,7 +319,7 @@ body.composing #kbd { display: none !important; }
 body.phone #bZh, body.phone #bTrace { padding: 0 8px; font-size: 13px; }
 
 /* ---------- header collapsed into a floating ball ---------- */
-#fab { position: fixed; z-index: 31; width: 46px; height: 46px; border-radius: 50%; top: 8px; left: 10px;
+#fab { position: fixed; z-index: 31; width: 46px; height: 46px; border-radius: 50%; bottom: 14px; left: 14px;
   background: rgba(20,10,46,.72); border: 2px solid var(--pink); box-shadow: 0 0 12px rgba(255,43,214,.45); touch-action: none;
   display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 #fab span { width: 14px; height: 14px; border-radius: 50%; background: var(--pink); box-shadow: 0 0 8px var(--pink); }
@@ -2030,7 +2036,7 @@ addEventListener('resize', () => { if (trace.classList.contains('show') && ref.n
   const saved = JSON.parse(localStorage.padkeyFab || 'null');
   const place = (x, y) => {
     x = Math.max(4, Math.min(innerWidth - 50, x)); y = Math.max(4, Math.min(innerHeight - 50, y));
-    fab.style.left = x + 'px'; fab.style.top = y + 'px'; fab.style.right = 'auto';
+    fab.style.left = x + 'px'; fab.style.top = y + 'px'; fab.style.right = 'auto'; fab.style.bottom = 'auto';
   };
   if (saved) place(saved.x, saved.y);
   let sx = 0, sy = 0, ox = 0, oy = 0, moved = false;
