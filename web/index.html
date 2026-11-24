@@ -201,6 +201,8 @@ body.phone #touchbar { display: none; }
 #kbd.std .k.mod { background: #2a2a2e; font-size: 15px; color: #cfcfd6; }
 #kbd.std .k .sh { font-size: 12px; color: #9a9aa4; line-height: 1; }
 #kbd.std .k .pl { line-height: 1.1; }
+#kbd.std .k .zy { position: absolute; right: 7px; bottom: 6px; font-size: 13px; line-height: 1; color: #f7b8e6; opacity: .85; pointer-events: none; }
+body.phone #kbd.std .k .zy { font-size: 9px; right: 3px; bottom: 3px; }
 #kbd.std .k.down { background: #6a6a72; transform: translateY(2px); box-shadow: 0 1px 0 #121214; }
 #kbd.std .k.latched { color: var(--cyan); box-shadow: 0 0 0 2px var(--cyan) inset, 0 3px 0 #121214; }
 #kbd.std .k.locked { background: rgba(0,240,255,.25); }
@@ -1447,6 +1449,8 @@ function buildStdKbd() {
       const el = makeKey(def);
       el._std = true;
       if (def[1]) el.innerHTML = `<span class="sh"></span><span class="pl"></span>`, el.querySelector('.sh').textContent = def[1], el.querySelector('.pl').textContent = def[0];
+      const zy = ZY[def[2]];                       // printed Zhuyin legend, like the real keycaps
+      if (zy && ri > 0) { const z = document.createElement('span'); z.className = 'zy'; z.textContent = zy; el.appendChild(z); }
       r.appendChild(el);
     }
     kb.appendChild(r);
