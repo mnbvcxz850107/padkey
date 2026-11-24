@@ -40,6 +40,8 @@ USBHIDKeyboard Keyboard;
 USBHIDMouse Mouse;
 USBHIDConsumerControl Consumer;
 static volatile bool usbUp = false;
+static volatile uint32_t fwdPkts = 0, fwdGiveup = 0;  // last image: BLE packets sent / given up
+static int fwdStuck = 0;  // consecutive packets the client never acked
 static volatile bool capsOn = false;      // host Caps Lock LED
 static volatile bool statusDirty = false;
 static bool ledEnabled = false;   // RGB LED off by default (user preference, stored in NVS)
@@ -744,8 +746,9 @@ static void bleSetAuthed(uint16_t h, bool on) {
 
 static void bleReply(uint16_t h, const String &s) {
   // Retry while the radio buffers are full (e.g. right after an image burst),
-  // otherwise short control messages like "imgend" could be lost.
-  for (int tries = 0; tries < 200; tries++) {
+  // otherwise short control messages like "imgend" could be lost. Bounded so a
+  // reply that will never fit this link's MTU can't stall the receive path.
+  for (int tries = 0; tries < 80; tries++) {
     if (bleEvt.notify(h, (const uint8_t *)s.c_str(), s.length())) return;
     delay(3);
   }
@@ -873,16 +876,23 @@ static bool forwardImageChunk(const uint8_t *p, size_t n) {
   std::vector<uint16_t> ids = bleAuthed;
   portEXIT_CRITICAL(&bleMux);
   if (ids.empty() || !bleOk) return true;
-  size_t room = max(20, (int)bleMtu - 3) - 1;
-  uint8_t pkt[520];
+  // Cap the fragment at a size every central reliably accepts (iOS negotiates an
+  // ATT_MTU >= 185). bleMtu is not trustworthy on this core (it can read back the
+  // 517 we requested rather than the negotiated value), so never size above 180.
+  size_t room = bleMtu > 24 ? min((int)bleMtu - 4, 180) : 20;
+  uint8_t pkt[200];
   for (size_t off = 0; off < n; off += room) {
     size_t k = min(room, n - off);
     pkt[0] = 0x01; memcpy(pkt + 1, p + off, k);
     for (auto h : ids) {
-      for (int tries = 0; tries < 200; tries++) {        // wait for radio buffers
-        if (bleEvt.notify(h, pkt, k + 1)) break;
+      bool sent = false;
+      for (int tries = 0; tries < 120; tries++) {        // wait for the radio buffers to drain
+        if (bleEvt.notify(h, pkt, k + 1)) { sent = true; break; }
         delay(3);
       }
+      fwdPkts++;
+      if (sent) fwdStuck = 0;
+      else { fwdGiveup++; if (++fwdStuck >= 4) return false; }   // client stopped pulling: abort, stay responsive
     }
   }
   return true;

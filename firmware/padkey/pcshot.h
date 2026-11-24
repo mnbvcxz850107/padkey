@@ -282,11 +282,19 @@ static void poll() {
     xSemaphoreTake(lock, portMAX_DELAY);
     esp_partition_read(part, SHOT_OFF + SEC + sendOff, buf, k);
     xSemaphoreGive(lock);
-    forwardImageChunk(buf, k);
+    bool ok = forwardImageChunk(buf, k);
     sendOff += k;
+    if (!ok) {                                            // client stalled: give up this image cleanly
+      broadcastText("imgend");
+      dbg("pcshot aborted");
+      active = false; needErase = true;
+      return;
+    }
     if (sendOff >= sendLen) {
       broadcastText("imgend");
-      dbg("pcshot sent");
+      char dm[64]; snprintf(dm, sizeof(dm), "pcshot sent len=%lu mtu=%u pkts=%lu giveup=%lu",
+        (unsigned long)sendLen, (unsigned)bleMtu, (unsigned long)fwdPkts, (unsigned long)fwdGiveup);
+      dbg(dm);
       active = false;
       needErase = true;
     }
