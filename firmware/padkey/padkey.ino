@@ -22,7 +22,7 @@
 #include "web_assets.h"
 #include "protocol.h"
 
-#define FW_VERSION "1.6.0"
+#define FW_VERSION "1.6.1"
 
 // ---- T-Dongle-S3 pins (from LilyGO examples) ----
 #define PIN_LCD_MOSI 3
@@ -740,7 +740,12 @@ static void bleSetAuthed(uint16_t h, bool on) {
 }
 
 static void bleReply(uint16_t h, const String &s) {
-  bleEvt.notify(h, (const uint8_t *)s.c_str(), s.length());
+  // Retry while the radio buffers are full (e.g. right after an image burst),
+  // otherwise short control messages like "imgend" could be lost.
+  for (int tries = 0; tries < 200; tries++) {
+    if (bleEvt.notify(h, (const uint8_t *)s.c_str(), s.length())) return;
+    delay(3);
+  }
 }
 
 static String bleStatusJson() {  // short: fits in one notification
