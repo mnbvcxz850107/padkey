@@ -639,7 +639,18 @@ async function blePump() {
   if (bleBusy || !bleCmd) return;
   bleBusy = true;
   while (bleQ.length && bleCmd) {
-    const u = bleQ.shift();
+    // Pack whatever is waiting into one radio write: [14, len, msg, len, msg, ...]
+    let u = bleQ.shift();
+    if (bleQ.length) {
+      const parts = [u]; let size = 2 + u.length;
+      while (bleQ.length && size + 1 + bleQ[0].length <= 240) { const m = bleQ.shift(); parts.push(m); size += 1 + m.length; }
+      if (parts.length > 1) {
+        const out = new Uint8Array(size); let o = 0;
+        out[o++] = 14;
+        for (const m of parts) { out[o++] = m.length; out.set(m, o); o += m.length; }
+        u = out;
+      }
+    }
     try { await bleWrite(bleCmd, u, false); } catch (e) { /* dropped */ }
   }
   bleBusy = false;
@@ -1155,10 +1166,8 @@ let kbdTouches = 0, lastKeyAt = 0;
 const TAP_MAX_MS = 320, KEY_SLOP = 22;
 
 function fireKey(u, lab, mods) {
-  mods.forEach((m) => send(new Uint8Array([M.KEYDOWN, m])));
-  send(new Uint8Array([M.KEYDOWN, u]));
-  send(new Uint8Array([M.KEYUP, u]));
-  mods.forEach((m) => send(new Uint8Array([M.KEYUP, m])));
+  let bits = 0; for (const m of mods) bits |= modBit(m);
+  send(new Uint8Array([M.TAP, bits, u]));                 // one message: press + release
   keyLabel(lab, mods);
 }
 function keyLabel(lab, mods) {
@@ -1191,6 +1200,11 @@ function makeKey(def) {
     el.classList.add('down');
     if (isGlobe) { el._longT = setTimeout(() => { el._dead = true; setZy(!zyMode); toast('只切換 App 上的注音標示（不送快捷鍵）'); }, 650); return; }
     if ((def[4] && !cls.includes('arr')) || cls.includes('fnkey')) return;   // special keys act on release (arrows still repeat)
+    if (isMod && el._std) {           // physical-keyboard modifier: really pressed while held
+      el._held = true; el._physMod = true;
+      send(new Uint8Array([M.KEYDOWN, u]));
+      return;
+    }
     if (!cfg.palm) {  // classic: act on press
       if (isMod) { toggleMod(u); return; }
       el._mods = [...latched.keys()];
@@ -1221,6 +1235,7 @@ function makeKey(def) {
     el.classList.remove('down');
     if (el._held) {
       send(new Uint8Array([M.KEYUP, u]));
+      if (el._physMod) { el._held = false; el._physMod = false; return; }
       (el._mods || []).forEach((m) => send(new Uint8Array([M.KEYUP, m])));
       el._held = false; clearLatched(); return;
     }
@@ -1233,7 +1248,7 @@ function makeKey(def) {
       fnTapAt = now; return;
     }
     if (def[4] && (fnOn() || !(cls.includes('arr')))) { keyExtra(def); clearLatched(); return; }
-    if (isMod) { if (cfg.palm) toggleMod(u); return; }
+    if (isMod) { if (el._std) return; if (cfg.palm) toggleMod(u); return; }
     fireKey(u, lab, [...latched.keys()]);
     clearLatched();
   };

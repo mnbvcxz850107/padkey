@@ -22,7 +22,7 @@
 #include "web_assets.h"
 #include "protocol.h"
 
-#define FW_VERSION "1.5.0"
+#define FW_VERSION "1.6.0"
 
 // ---- T-Dongle-S3 pins (from LilyGO examples) ----
 #define PIN_LCD_MOSI 3
@@ -352,7 +352,23 @@ static void setLabel(const String &s, uint16_t color) {
 static QueueHandle_t queue;
 
 
+static void enqueueOne(const uint8_t *d, size_t n);
+// A batch carries several messages in one radio write (much faster typing over BLE).
 static void enqueue(const uint8_t *d, size_t n) {
+  if (n >= 2 && d[0] == M_BATCH) {
+    size_t i = 1;
+    while (i < n) {
+      size_t len = d[i++];
+      if (!len || i + len > n) break;
+      enqueueOne(d + i, len);
+      i += len;
+    }
+    return;
+  }
+  enqueueOne(d, n);
+}
+
+static void enqueueOne(const uint8_t *d, size_t n) {
   Msg m;
   m.len = min(n, sizeof(m.data));
   memcpy(m.data, d, m.len);
