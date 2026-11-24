@@ -41,7 +41,7 @@ USBHIDMouse Mouse;
 USBHIDConsumerControl Consumer;
 static volatile bool usbUp = false;
 static volatile uint32_t fwdPkts = 0, fwdGiveup = 0;  // last image: BLE packets sent / given up
-static int fwdStuck = 0;  // consecutive packets the client never acked
+static volatile uint16_t bleChunk = 513;  // (diagnostic only)
 static volatile bool capsOn = false;      // host Caps Lock LED
 static volatile bool statusDirty = false;
 static bool ledEnabled = false;   // RGB LED off by default (user preference, stored in NVS)
@@ -763,20 +763,52 @@ static String bleStatusJson() {  // short: fits in one notification
   return s;
 }
 
+// Replies to BLE commands are NOT sent from inside the write callback: notifying
+// there can swallow the write's own ATT response, and the client then drops the
+// link after the 30 s ATT timeout (iOS: reason 0x13, "connects then disconnects").
+// The callback queues the reply; loop() sends it once the write has completed.
+struct BlePending { uint16_t h; String s; };
+static std::vector<BlePending> blePending;
+static portMUX_TYPE blePendMux = portMUX_INITIALIZER_UNLOCKED;
+static SemaphoreHandle_t blePendLock;
+static void bleReplyLater(uint16_t h, const String &s) {
+  if (!blePendLock) return;
+  xSemaphoreTake(blePendLock, portMAX_DELAY);
+  if (blePending.size() < 16) blePending.push_back({h, s});
+  xSemaphoreGive(blePendLock);
+}
+static void bleFlushReplies() {
+  if (!blePendLock) return;
+  std::vector<BlePending> todo;
+  xSemaphoreTake(blePendLock, portMAX_DELAY);
+  todo.swap(blePending);
+  xSemaphoreGive(blePendLock);
+  for (auto &r : todo) bleReply(r.h, r.s);
+}
+
+static void bleLog(const char *fmt, ...) {   // connection diagnostics over USB (only while a host listens)
+  if (!bridgeAlive()) return;
+  char m[64]; va_list ap; va_start(ap, fmt); vsnprintf(m, sizeof(m), fmt, ap); va_end(ap);
+  cdcSend(D_LOG, (const uint8_t *)m, strlen(m));
+}
+
 static void setupBle() {
+  blePendLock = xSemaphoreCreateMutex();
   if (!BLE.begin(apSsid.c_str())) return;
   BLE.setMTU(517);
   bleServer = BLE.createServer();
   if (!bleServer) return;
   bleServer.advertiseOnDisconnect(true);
-  bleServer.onMtuChanged([](BLEServer &srv, const BLEConnInfo &c, uint16_t mtu) { bleMtu = mtu; });
+  bleServer.onMtuChanged([](BLEServer &srv, const BLEConnInfo &c, uint16_t mtu) { bleMtu = mtu; bleLog("ble mtu h=%u %u", (unsigned)c.getHandle(), (unsigned)mtu); });
   bleServer.onConnect([](BLEServer &srv, const BLEConnInfo &c) {
+    bleLog("ble connect h=%u mtu=%u", (unsigned)c.getHandle(), (unsigned)c.getMTU());
     bleMtu = c.getMTU();
     BLEConnParams p = {12, 24, 0, 400};  // 15-30 ms interval: snappy cursor
     srv.updateConnParams(c.getHandle(), p);
     bleReadvertise = true;               // stay discoverable (done from loop(), not in this callback)
   });
   bleServer.onDisconnect([](BLEServer &srv, const BLEConnInfo &c, uint8_t reason) {
+    bleLog("ble disconnect h=%u reason=0x%02x", (unsigned)c.getHandle(), (unsigned)reason);
     bool was = bleIsAuthed(c.getHandle());
     bleSetAuthed(c.getHandle(), false);
     if (was && clientCount == 0) { uint8_t m = M_RELEASE; enqueue(&m, 1); }
@@ -796,18 +828,19 @@ static void setupBle() {
       if (cmd.startsWith("auth ")) {
         bool ok = cmd.substring(5) == token;
         bleSetAuthed(h, ok);
-        bleReply(h, ok ? "ok " + bleStatusJson() : String("bad"));
+        bleLog("ble auth h=%u %s", (unsigned)h, ok ? "ok" : "BAD");
+        bleReplyLater(h, ok ? "ok " + bleStatusJson() : String("bad"));
         if (ok) { const uint8_t hello[] = {M_LABEL, 0xFF, 0x07, 'B', 'L', 'E', ' ', 'O', 'K'}; enqueue(hello, sizeof(hello)); }
       } else if (cmd == "pairstart") {
         pairStart();
-        bleReply(h, "pin");
+        bleReplyLater(h, "pin");
       } else if (cmd.startsWith("pair ")) {
-        bleReply(h, pairTry(cmd.substring(5)) ? "token " + token : String("badpin"));
+        bleReplyLater(h, pairTry(cmd.substring(5)) ? "token " + token : String("badpin"));
       }
       return;
     }
     if (!bleIsAuthed(h)) return;
-    if (d[0] == M_UTEXT) { String r = handleUtext(d, n); if (r.length()) bleReply(h, "utext " + r); }
+    if (d[0] == M_UTEXT) { String r = handleUtext(d, n); if (r.length()) bleReplyLater(h, "utext " + r); }
     else enqueue(d, n);
   });
   if (!bleServer.start()) return;
@@ -876,23 +909,16 @@ static bool forwardImageChunk(const uint8_t *p, size_t n) {
   std::vector<uint16_t> ids = bleAuthed;
   portEXIT_CRITICAL(&bleMux);
   if (ids.empty() || !bleOk) return true;
-  // Cap the fragment at a size every central reliably accepts (iOS negotiates an
-  // ATT_MTU >= 185). bleMtu is not trustworthy on this core (it can read back the
-  // 517 we requested rather than the negotiated value), so never size above 180.
-  size_t room = bleMtu > 24 ? min((int)bleMtu - 4, 180) : 20;
-  uint8_t pkt[200];
+  size_t room = max(20, (int)bleMtu - 3) - 1;
+  uint8_t pkt[520];
   for (size_t off = 0; off < n; off += room) {
     size_t k = min(room, n - off);
     pkt[0] = 0x01; memcpy(pkt + 1, p + off, k);
     for (auto h : ids) {
-      bool sent = false;
-      for (int tries = 0; tries < 120; tries++) {        // wait for the radio buffers to drain
-        if (bleEvt.notify(h, pkt, k + 1)) { sent = true; break; }
+      for (int tries = 0; tries < 200; tries++) {        // wait for the radio buffers to drain
+        if (bleEvt.notify(h, pkt, k + 1)) break;
         delay(3);
       }
-      fwdPkts++;
-      if (sent) fwdStuck = 0;
-      else { fwdGiveup++; if (++fwdStuck >= 4) return false; }   // client stopped pulling: abort, stay responsive
     }
   }
   return true;
@@ -928,8 +954,9 @@ static void pollBridge() {
       bridgeSeen = millis();
       switch (type) {
         case H_HELLO: {
-          char hb[48];
-          snprintf(hb, sizeof(hb), "%s reset=%d up=%lus", FW_VERSION, (int)esp_reset_reason(), (unsigned long)(millis() / 1000));
+          char hb[96];
+          snprintf(hb, sizeof(hb), "%s reset=%d up=%lus heap=%u min=%u blk=%u", FW_VERSION, (int)esp_reset_reason(), (unsigned long)(millis() / 1000),
+                   (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMinFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
           cdcSend(D_HELLO, (const uint8_t *)hb, strlen(hb));
           break;
         }
@@ -1031,6 +1058,7 @@ void loop() {
   }
 
   pollBridge();
+  bleFlushReplies();
   pcshot::poll();
   if (bleReadvertise) { bleReadvertise = false; delay(50); if (bleOk) BLE.getAdvertising().start(); }
   handleButton();
