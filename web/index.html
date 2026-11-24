@@ -356,6 +356,7 @@ header .hbtn { height: 40px !important; }
   <button class="hbtn" id="bSys" style="display:none">🍎 iPad 鍵盤</button>
   <button class="hbtn" id="bKbd">⌨️ 鍵盤</button>
   <button class="hbtn" id="bTrace">🎨 描圖</button>
+  <button class="hbtn" id="bMisc">📦 其他</button>
   <button class="hbtn" id="bSet">⚙️</button>
 </header>
 <div id="touchbar"><div class="tb-scroll" id="tbScroll"></div><button id="tbZy" style="display:none">注</button><button id="tbFn">fn</button></div>
@@ -502,6 +503,18 @@ header .hbtn { height: 40px !important; }
 </div>
 
 <label id="hapL" style="position:fixed;left:-100px;top:-100px;opacity:0"><input type="checkbox" switch id="hapI"></label>
+<div class="overlay" id="misc"><div class="card">
+  <h2>📦 其他：暫存框</h2>
+  <p>把剪貼簿的字（例如從 iPhone「通用剪貼簿」傳來的 API 金鑰）貼在這裡再處理。內容不會被儲存，關掉就清空。</p>
+  <textarea id="miscText" rows="4" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="長按這裡 →「貼上」，或按下面的 📋 貼上"
+    style="width:100%;font-size:16px;border-radius:10px;border:1px solid var(--keyb);background:var(--key);color:var(--text);padding:10px;-webkit-user-select:text;user-select:text"></textarea>
+  <button class="btn ghost" id="miscPaste">📋 貼上剪貼簿的內容</button>
+  <button class="btn ghost" id="miscKey">🔑 設為 OpenAI 金鑰（AI 描圖用）</button>
+  <button class="btn ghost" id="miscSend">⌨️ 傳到三星平板（貼到目前的輸入框）</button>
+  <button class="btn ghost" id="miscClear">🗑 清除</button>
+  <button class="btn" id="miscClose">關閉</button>
+</div></div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -2119,6 +2132,29 @@ addEventListener('resize', () => { if (trace.classList.contains('show') && ref.n
   hdr.addEventListener('click', (e) => { if (e.target.closest('button')) setTimeout(() => document.body.classList.remove('menuopen'), 120); });
   document.addEventListener('pointerdown', (e) => { if (!e.target.closest('header, #fab')) document.body.classList.remove('menuopen'); }, true);
 })();
+
+// ---- 其他: scratch box (nothing is stored)
+$('bMisc').onclick = () => { $('misc').classList.add('show'); };
+$('miscClose').onclick = () => { $('miscText').value = ''; $('misc').classList.remove('show'); };
+$('miscClear').onclick = () => { $('miscText').value = ''; };
+$('miscPaste').onclick = async () => {
+  try { $('miscText').value = await navigator.clipboard.readText(); }
+  catch (e) { toast('這個瀏覽器不讓網頁直接讀剪貼簿：請長按上面的框 →「貼上」', 4000); $('miscText').focus(); }
+};
+$('miscKey').onclick = () => {
+  const v = $('miscText').value.trim();
+  if (!/^sk-[\w-]{16,}$/.test(v)) { if (!confirm('這看起來不像 OpenAI 金鑰（通常 sk- 開頭），還是要存嗎？')) return; }
+  localStorage.padkeyAiKey = v; $('aiKey').value = v;
+  $('miscText').value = '';
+  toast('🔑 已存成 OpenAI 金鑰（只存在這台裝置）', 3000);
+};
+$('miscSend').onclick = () => {
+  const v = $('miscText').value;
+  if (!v) return toast('框裡沒有字');
+  if (!authed) return toast('還沒連線');
+  enqueueText(v.replace(/[\r\n]+$/, ''));
+  toast('⌨️ 已傳到三星平板', 2000);
+};
 
 connect();
 </script>
