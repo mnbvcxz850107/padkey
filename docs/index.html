@@ -191,6 +191,9 @@ body.phone #touchbar { display: none; }
 #tbFn.on { color: var(--cyan); box-shadow: 0 0 10px rgba(0,240,255,.55) inset; }
 .tb-scroll .k { min-width: 0 !important; flex: 1 !important; }
 .hot { animation: hot .45s ease-out; }
+.pop { animation: keypop .18s ease-out; }
+@keyframes keypop { 0% { transform: scale(.9); box-shadow: 0 0 18px rgba(0,240,255,.8); } 100% { transform: scale(1); } }
+#sidekeys button.down, .ckeys button.down { background: #00a8b5 !important; color: #fff; box-shadow: 0 0 14px rgba(0,240,255,.6); }
 
 /* ---------- standard keyboard ---------- */
 #kbd.std { background: #1b1b1e; padding: 8px 8px 10px; border: none; }
@@ -390,6 +393,8 @@ header .hbtn { height: 40px !important; }
   <label class="set">捲動速度 <input type="range" id="sScroll" min="0.3" max="3" step="0.1"></label>
   <label class="set">自然捲動（像 iPad） <input type="checkbox" id="sNatural"></label>
   <label class="set">防誤觸（可以把手放在上面打字） <input type="checkbox" id="sPalm"></label>
+  <label class="set">按鍵震動 <input type="checkbox" id="sHaptic"></label>
+  <label class="set">按鍵音 <input type="checkbox" id="sClick"></label>
   <label class="set">🌐 中英切換快捷鍵
     <select id="sIme" style="height:36px;border-radius:8px;background:var(--key);color:var(--text);border:1px solid var(--keyb);font-size:15px">
       <option value="ctrl">Ctrl + 空白（Gboard）</option>
@@ -495,6 +500,7 @@ header .hbtn { height: 40px !important; }
   <div id="tSaveBox"><div><p>長按圖片 → 儲存影像</p><label class="tl"><input type="checkbox" id="tSaveRef" checked> 包含原圖</label><img id="tSaved" alt=""></div></div>
 </div>
 
+<label id="hapL" style="position:fixed;left:-100px;top:-100px;opacity:0"><input type="checkbox" switch id="hapI"></label>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -502,7 +508,23 @@ header .hbtn { height: 40px !important; }
 const $ = (id) => document.getElementById(id);
 
 // ------------------------------------------------------------ settings
-const cfg = Object.assign({ speed: 1.6, accel: 0.8, scroll: 1, natural: true, palm: true, ime: 'ctrl' }, JSON.parse(localStorage.padkeyCfg || '{}'));
+// Key feedback: iOS haptic (toggling a hidden <input switch> taps the Taptic Engine
+// on iOS 18+), a short click sound, and a press animation.
+let audioCtx = null;
+function keyFeedback(el) {
+  try { if (cfg.haptic) document.getElementById('hapL').click(); } catch (e) {}
+  if (cfg.click) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t = audioCtx.currentTime, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'square'; o.frequency.setValueAtTime(1900, t); o.frequency.exponentialRampToValueAtTime(700, t + 0.025);
+      g.gain.setValueAtTime(0.06, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+      o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + 0.045);
+    } catch (e) {}
+  }
+  if (el) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
+}
+const cfg = Object.assign({ speed: 1.6, accel: 0.8, scroll: 1, natural: true, palm: true, ime: 'ctrl', haptic: true, click: true }, JSON.parse(localStorage.padkeyCfg || '{}'));
 const saveCfg = () => localStorage.padkeyCfg = JSON.stringify(cfg);
 
 function toast(msg, ms = 2200) {
@@ -994,7 +1016,7 @@ function fxButton([icon, name, cls, a], base) {
   let sx = 0, sy = 0, longT = null;
   b.addEventListener('mousedown', (e) => e.preventDefault());
   b.addEventListener('pointerdown', (e) => {
-    sx = e.clientX; sy = e.clientY;
+    sx = e.clientX; sy = e.clientY; keyFeedback(b);
     if (a.idx !== undefined) longT = setTimeout(() => { longT = 'fired'; editMacro(a.idx); }, 650);
   });
   b.addEventListener('pointerup', (e) => {
@@ -1146,6 +1168,7 @@ function makeKey(def) {
   el.addEventListener('pointerdown', (e) => {
     e.preventDefault(); el.setPointerCapture(e.pointerId);
     kbdTouches++;
+    keyFeedback(el);
     el._t0 = performance.now(); el._x = e.clientX; el._y = e.clientY; el._dead = false; el._held = false;
     // Very large contact = palm.
     // (No contact-size check: iPad reports large sizes for ordinary fingers.)
@@ -1533,6 +1556,8 @@ function bindRange(id, key) {
   el.oninput = () => { cfg[key] = parseFloat(el.value); saveCfg(); };
 }
 bindRange('sSpeed', 'speed'); bindRange('sAccel', 'accel'); bindRange('sScroll', 'scroll');
+$('sHaptic').checked = cfg.haptic; $('sHaptic').onchange = () => { cfg.haptic = $('sHaptic').checked; saveCfg(); };
+$('sClick').checked = cfg.click; $('sClick').onchange = () => { cfg.click = $('sClick').checked; saveCfg(); };
 $('sPalm').checked = cfg.palm; $('sPalm').onchange = () => { cfg.palm = $('sPalm').checked; saveCfg(); };
 $('sIme').value = cfg.ime; $('sIme').onchange = () => { cfg.ime = $('sIme').value; saveCfg(); };
 $('sNatural').checked = cfg.natural; $('sNatural').onchange = () => { cfg.natural = $('sNatural').checked; saveCfg(); };
@@ -1691,7 +1716,7 @@ for (const box of [$('ckeys'), $('sidekeys')]) for (const k of (box.id === 'side
   if (box.id === 'sidekeys' && k[3]) b.style.gridArea = k[3];   // big Enter / Backspace
   b.addEventListener('mousedown', (e) => e.preventDefault());       // keep the iPad keyboard up
   b.addEventListener('pointerdown', (e) => {
-    e.preventDefault(); b.setPointerCapture(e.pointerId); b.classList.add('down');
+    e.preventDefault(); b.setPointerCapture(e.pointerId); b.classList.add('down'); keyFeedback(b);
     for (const [bit, m] of MODKEYS) if (mods & bit) send(new Uint8Array([M.KEYDOWN, m]));
     send(new Uint8Array([M.KEYDOWN, u]));
     label(lab.replace(/[^\x20-\x7e]/g, '') || 'KEY', C565.pink);
