@@ -394,6 +394,7 @@ header .hbtn { height: 40px !important; }
   <label class="set">捲動速度 <input type="range" id="sScroll" min="0.3" max="3" step="0.1"></label>
   <label class="set">自然捲動（像 iPad） <input type="checkbox" id="sNatural"></label>
   <label class="set">防誤觸（可以把手放在上面打字） <input type="checkbox" id="sPalm"></label>
+  <label class="set">T-Dongle 彩色燈 <input type="checkbox" id="sLed"></label>
   <label class="set">按鍵震動 <input type="checkbox" id="sHaptic"></label>
   <label class="set">按鍵音 <input type="checkbox" id="sClick"></label>
   <label class="set">🌐 中英切換快捷鍵
@@ -547,7 +548,7 @@ function toast(msg, ms = 2200) {
 }
 
 // ------------------------------------------------------------ connection
-const M = { MOVE: 1, BTN: 2, SCROLL: 3, KEYDOWN: 4, KEYUP: 5, TAP: 6, TEXT: 7, CONSUMER: 8, RELEASE: 9, FX: 10, LABEL: 11, UTEXT: 12 };
+const M = { MOVE: 1, BTN: 2, SCROLL: 3, KEYDOWN: 4, KEYUP: 5, TAP: 6, TEXT: 7, CONSUMER: 8, RELEASE: 9, FX: 10, LABEL: 11, UTEXT: 12, LED: 13 };
 const enc = new TextEncoder();
 // Two transports, same messages:
 //  * Wi-Fi WebSocket when the page is served by the dongle (Safari, hotspot)
@@ -697,6 +698,7 @@ let info = {};
 function status(j) {
   info = j; setPill(true);
   if (j.caps !== undefined && j.caps !== hostCaps) { hostCaps = j.caps; refreshKeys(); }
+  if (j.led !== undefined && $('sLed')) $('sLed').checked = j.led;
   const u = $('usb'); u.textContent = j.usb ? 'USB ✓' : 'USB ✗'; u.className = 'pill ' + (j.usb ? 'ok' : 'bad');
 }
 function setPill(ok) {
@@ -1586,6 +1588,7 @@ function bindRange(id, key) {
   el.oninput = () => { cfg[key] = parseFloat(el.value); saveCfg(); };
 }
 bindRange('sSpeed', 'speed'); bindRange('sAccel', 'accel'); bindRange('sScroll', 'scroll');
+$('sLed').onchange = () => { send(new Uint8Array([M.LED, $('sLed').checked ? 1 : 0])); toast($('sLed').checked ? '💡 彩色燈已開啟' : '彩色燈已關閉'); };
 $('sHaptic').checked = cfg.haptic; $('sHaptic').onchange = () => { cfg.haptic = $('sHaptic').checked; saveCfg(); };
 $('sClick').checked = cfg.click; $('sClick').onchange = () => { cfg.click = $('sClick').checked; saveCfg(); };
 $('sPalm').checked = cfg.palm; $('sPalm').onchange = () => { cfg.palm = $('sPalm').checked; saveCfg(); };

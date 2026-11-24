@@ -22,7 +22,7 @@
 #include "web_assets.h"
 #include "protocol.h"
 
-#define FW_VERSION "1.4.3"
+#define FW_VERSION "1.5.0"
 
 // ---- T-Dongle-S3 pins (from LilyGO examples) ----
 #define PIN_LCD_MOSI 3
@@ -42,6 +42,7 @@ USBHIDConsumerControl Consumer;
 static volatile bool usbUp = false;
 static volatile bool capsOn = false;      // host Caps Lock LED
 static volatile bool statusDirty = false;
+static bool ledEnabled = false;   // RGB LED off by default (user preference, stored in NVS)
 static KeyReport report = {};
 
 static void keyDown(uint8_t k) {
@@ -117,6 +118,7 @@ static void loadSettings() {
   wifiSsid = prefs.getString("ssid", "");
   wifiPass = prefs.getString("pass", "");
   apPass = prefs.getString("appass", "");
+  ledEnabled = prefs.getBool("led", false);
   if (apPass.length() < 8) { apPass = randomDigits(8); prefs.putString("appass", apPass); }
   uint64_t efuse = ESP.getEfuseMac();
   uint8_t mac[6];
@@ -312,6 +314,9 @@ static void drawFrame() {
 }
 
 static void updateLed() {
+  static bool dark = false;
+  if (!ledEnabled) { if (!dark) { ledShow(0, 0, 0, 0); dark = true; } return; }
+  dark = false;
   uint32_t now = millis();
   uint8_t r, g, b;
   if (fx != FX_NONE && now < fxUntil) {
@@ -389,6 +394,9 @@ static void handleMsg(const Msg &m, int &accX, int &accY) {
     case M_RELEASE: releaseAll(); break;
     case M_FX:
       if (m.len >= 2) { fx = (Fx)d[1]; fxUntil = millis() + 3000; }
+      break;
+    case M_LED:
+      if (m.len >= 2) { ledEnabled = d[1] != 0; prefs.putBool("led", ledEnabled); statusDirty = true; }
       break;
     case M_LABEL:
       if (m.len >= 3) {
@@ -723,6 +731,7 @@ static String bleStatusJson() {  // short: fits in one notification
   String s = "{\"usb\":"; s += usbUp ? "true" : "false";
   s += ",\"caps\":"; s += capsOn ? "true" : "false";
   s += ",\"bridge\":"; s += bridgeAlive() ? "true" : "false";
+  s += ",\"led\":"; s += ledEnabled ? "true" : "false";
   s += ",\"ble\":true,\"fw\":\"" FW_VERSION "\"}";
   return s;
 }

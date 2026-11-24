@@ -4,7 +4,11 @@
 set -e
 cd "$(dirname "$0")"
 # Pause the bridge (it shares the USB port) until flashing is done.
-touch .flashing; trap 'rm -f .flashing' EXIT
+touch .flashing
+# The PadKey Bridge Android app holds the USB port: pause it (via adb) while flashing.
+ADB="adb -s emulator-5554"
+$ADB shell am broadcast -a uk.padkey.bridge.PAUSE >/dev/null 2>&1 && sleep 2
+trap 'rm -f .flashing; $ADB shell am broadcast -a uk.padkey.bridge.RESUME >/dev/null 2>&1' EXIT
 pkill -f "python3 -u .*padkey_bridge[.]py" 2>/dev/null && sleep 1
 TU=/data/data/com.termux/files/usr/bin/termux-usb
 PY=$HOME/work/.venv/bin/python
