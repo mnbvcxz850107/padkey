@@ -462,6 +462,7 @@ header .hbtn { height: 40px !important; }
 <div id="trace">
   <div class="tbar">
     <button class="hbtn" id="tClose">✕</button>
+    <span class="tl" id="tRx" style="color:var(--cyan);min-width:150px"></span>
     <span class="tl">原圖</span><input type="range" id="tOpacity" min="0" max="1" step="0.05" value="0.5">
     <span class="tl">粗細</span><input type="range" id="tSize" min="1" max="20" step="1" value="4">
     <button class="sw on" data-c="#ff2bd6" style="background:#ff2bd6"></button><button class="sw" data-c="#111111" style="background:#111"></button>
@@ -1788,19 +1789,25 @@ function onUtextStatus(s) {
 // ------------------------------------------------------------ 描圖 (tracing)
 const IMG = { buf: null, len: 0, w: 0, h: 0 };
 const history = [];
+function rxStatus(t) { const e = $('tRx'); if (e) e.textContent = t; }
 function onImageStart(arg) {
   const [size, w, h] = arg.split(' ').map(Number);
-  IMG.buf = new Uint8Array(size); IMG.len = 0; IMG.w = w; IMG.h = h;
+  IMG.buf = new Uint8Array(size); IMG.len = 0; IMG.w = w; IMG.h = h; IMG.chunks = 0;
   $('bTrace').classList.add('busy');
+  rxStatus(`接收中 0%（0/${Math.round(size / 1024)} KB）`);
 }
 function onBinary(u) {
   if (u[0] !== 1 || !IMG.buf) return;
   const n = Math.min(u.length - 1, IMG.buf.length - IMG.len);
-  IMG.buf.set(u.subarray(1, 1 + n), IMG.len); IMG.len += n;
+  IMG.buf.set(u.subarray(1, 1 + n), IMG.len); IMG.len += n; IMG.chunks++;
   $('bTrace').dataset.pct = Math.round(IMG.len * 100 / IMG.buf.length) + '%';
+  if (IMG.chunks % 8 === 0) rxStatus(`接收中 ${Math.round(IMG.len * 100 / IMG.buf.length)}%（${Math.round(IMG.len / 1024)}/${Math.round(IMG.buf.length / 1024)} KB）`);
 }
 function onImageEnd() {
-  if (!IMG.buf) return;
+  if (!IMG.buf) { rxStatus('⚠️ 收到結尾但沒收到開頭'); toast('⚠️ 圖片沒有收到開頭，請再擷取一次', 4000); return; }
+  const full = IMG.len >= IMG.buf.length;
+  rxStatus(full ? `✅ 收到（${Math.round(IMG.len / 1024)} KB）` : `⚠️ 圖片不完整（${Math.round(IMG.len / 1024)}/${Math.round(IMG.buf.length / 1024)} KB）`);
+  if (!full) toast(`⚠️ 圖片不完整：只收到 ${Math.round(IMG.len / 1024)}/${Math.round(IMG.buf.length / 1024)} KB`, 5000);
   const url = URL.createObjectURL(new Blob([IMG.buf.subarray(0, IMG.len)], { type: 'image/jpeg' }));
   IMG.buf = null;
   history.unshift(url); if (history.length > 8) URL.revokeObjectURL(history.pop());
