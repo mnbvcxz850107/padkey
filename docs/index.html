@@ -475,6 +475,7 @@ header .hbtn { height: 40px !important; }
     <button class="hbtn" id="tFit">⤢</button>
     <button class="hbtn" id="tPrev">上一張</button>
     <button class="hbtn" id="tShot">📸 擷取平板</button>
+    <button class="hbtn" id="tPcShot">💻 擷取電腦</button>
     <button class="hbtn" id="tCrop">✂️ 裁切</button>
     <button class="hbtn" id="tAI">✨ AI 整理</button>
     <span id="tCropActs" style="display:none"><button class="hbtn on" id="tCropOk">套用</button> <button class="hbtn" id="tCropNo">取消</button></span>
@@ -482,7 +483,7 @@ header .hbtn { height: 40px !important; }
     <button class="hbtn" id="tSave">💾</button>
   </div>
   <div id="tArea"><div id="tStage"><img id="tRef" alt=""><canvas id="tInk"></canvas><div id="tSel"></div></div>
-    <div class="tempty">按上方「📸 擷取平板」，或在三星平板截圖（電源鍵＋音量下），<br>圖片就會傳到這裡；再用「✂️ 裁切」框出要描的部分。</div></div>
+    <div class="tempty">按上方「📸 擷取平板」，或在三星平板截圖（電源鍵＋音量下），<br>圖片就會傳到這裡；再用「✂️ 裁切」框出要描的部分。<br>T-Dongle 插在 Linux 電腦上時，按「💻 擷取電腦」（不用網路、不用裝程式）。</div></div>
   <div id="tAiMenu"><div>
     <p>AI 會整理成「點到為止」的描圖練習稿（約 10–60 秒）。有截圖就照截圖內容；沒有截圖就照下面的主題畫。</p>
     <input type="text" id="aiTopic" placeholder="主題／補充說明（選填），例如：腎元的構造、β-blocker 的機轉" autocomplete="off">
@@ -548,7 +549,7 @@ function toast(msg, ms = 2200) {
 }
 
 // ------------------------------------------------------------ connection
-const M = { MOVE: 1, BTN: 2, SCROLL: 3, KEYDOWN: 4, KEYUP: 5, TAP: 6, TEXT: 7, CONSUMER: 8, RELEASE: 9, FX: 10, LABEL: 11, UTEXT: 12, LED: 13 };
+const M = { MOVE: 1, BTN: 2, SCROLL: 3, KEYDOWN: 4, KEYUP: 5, TAP: 6, TEXT: 7, CONSUMER: 8, RELEASE: 9, FX: 10, LABEL: 11, UTEXT: 12, LED: 13, PCSHOT: 15 };
 const enc = new TextEncoder();
 // Two transports, same messages:
 //  * Wi-Fi WebSocket when the page is served by the dongle (Safari, hotspot)
@@ -569,7 +570,10 @@ function onServerText(s) {
   else if (s.startsWith('utext ')) onUtextStatus(s.slice(6));
   else if (s.startsWith('img ')) onImageStart(s.slice(4));
   else if (s === 'imgend') onImageEnd();
+  else if (s === 'pcshot typed') { clearTimeout(pcWait); pcWait = setTimeout(() => { if (!IMG.buf) toast('⚠️ 電腦沒有傳回截圖：請確認電腦是 Linux 桌面、鍵盤是英文輸入狀態，再試一次', 6000); }, 15000); }
+  else if (s === 'pcshot nodrive') toast('⚠️ T-Dongle 的隨身碟功能沒有啟動', 4000);
 }
+let pcWait = 0;
 
 function connect() {
   if (mode === 'ble') { if (bleDev) bleConnect(); else $('bleOv').classList.add('show'); return; }
@@ -1844,7 +1848,9 @@ function onImageEnd() {
   const full = IMG.len >= IMG.buf.length;
   rxStatus(full ? `✅ 收到（${Math.round(IMG.len / 1024)} KB）` : `⚠️ 圖片不完整（${Math.round(IMG.len / 1024)}/${Math.round(IMG.buf.length / 1024)} KB）`);
   if (!full) toast(`⚠️ 圖片不完整：只收到 ${Math.round(IMG.len / 1024)}/${Math.round(IMG.buf.length / 1024)} KB`, 5000);
-  const url = URL.createObjectURL(new Blob([IMG.buf.subarray(0, IMG.len)], { type: 'image/jpeg' }));
+  clearTimeout(pcWait);
+  const isPng = IMG.buf[0] === 0x89 && IMG.buf[1] === 0x50;
+  const url = URL.createObjectURL(new Blob([IMG.buf.subarray(0, IMG.len)], { type: isPng ? 'image/png' : 'image/jpeg' }));
   IMG.buf = null;
   history.unshift(url); if (history.length > 8) URL.revokeObjectURL(history.pop());
   $('bTrace').classList.remove('busy'); $('bTrace').classList.add('new'); delete $('bTrace').dataset.pct;
@@ -1991,6 +1997,14 @@ $('tShot').onclick = () => {
   send(new Uint8Array([M.TAP, 0, 0x46]));
   wantCrop = true;
   toast('📸 已讓平板截圖，傳送中…（幾秒後會直接進入裁切）', 3500);
+};
+// Ask the computer the T-Dongle is plugged into (Linux desktop) for a screenshot:
+// the dongle opens Alt+F2, runs the script on its PADKEY drive and sends the image back.
+$('tPcShot').onclick = () => {
+  if (!authed) return toast('還沒連線');
+  send(new Uint8Array([M.PCSHOT]));
+  wantCrop = true;
+  toast('💻 正在讓電腦截圖（約 6 秒鍵盤會自動打字，請先別碰電腦）…', 6000);
 };
 // ---- AI tidy-up: this device -> OpenAI directly (key kept in this browser only)
 // Every preset is a TRACING-PRACTICE sheet: minimal, airy, black on white, light text.

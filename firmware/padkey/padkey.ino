@@ -22,7 +22,7 @@
 #include "web_assets.h"
 #include "protocol.h"
 
-#define FW_VERSION "1.6.1"
+#define FW_VERSION "1.7.0"
 
 // ---- T-Dongle-S3 pins (from LilyGO examples) ----
 #define PIN_LCD_MOSI 3
@@ -375,6 +375,8 @@ static void enqueueOne(const uint8_t *d, size_t n) {
   xQueueSend(queue, &m, 0);
 }
 
+static void pcshotTrigger(uint8_t how);
+
 static void handleMsg(const Msg &m, int &accX, int &accY) {
   const uint8_t *d = m.data;
   switch (d[0]) {
@@ -411,6 +413,7 @@ static void handleMsg(const Msg &m, int &accX, int &accY) {
     case M_FX:
       if (m.len >= 2) { fx = (Fx)d[1]; fxUntil = millis() + 3000; }
       break;
+    case M_PCSHOT: pcshotTrigger(m.len >= 2 ? d[1] : 0); break;
     case M_LED:
       if (m.len >= 2) { ledEnabled = d[1] != 0; prefs.putBool("led", ledEnabled); statusDirty = true; }
       break;
@@ -896,6 +899,9 @@ static void broadcastText(const String &s) {
   for (auto h : ids) bleReply(h, s);
 }
 
+#include "pcshot.h"
+static void pcshotTrigger(uint8_t how) { pcshot::trigger(how); }
+
 // USB serial frames from the host bridge.
 static void pollBridge() {
   static uint8_t buf[1100];
@@ -923,6 +929,7 @@ static void pollBridge() {
                             setLabel("IMAGE", 0x07FF); break; }
         case H_IMG_DATA: forwardImageChunk(p, need); cdcSend(D_ACK, nullptr, 0); break;
         case H_IMG_END: broadcastText("imgend"); break;
+        case H_PCSHOT: { const uint8_t m[] = {M_PCSHOT}; enqueue(m, 1); break; }
       }
       have = 0;
     }
@@ -953,6 +960,7 @@ void setup() {
   Keyboard.begin();
   Mouse.begin();
   Consumer.begin();
+  pcshot::begin();
   USB.begin();
   Serial.setRxBufferSize(4096);
   Serial.begin(115200);
@@ -1013,6 +1021,7 @@ void loop() {
   }
 
   pollBridge();
+  pcshot::poll();
   if (bleReadvertise) { bleReadvertise = false; delay(50); if (bleOk) BLE.getAdvertising().start(); }
   handleButton();
   if (rebootAt && now > rebootAt) ESP.restart();

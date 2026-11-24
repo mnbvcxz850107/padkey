@@ -45,6 +45,7 @@ with open(out, "w") as f:
     f.write(arr("index_html_gz", gzip.compress(html, 9, mtime=0)))
     f.write(arr("manifest_json_gz", gzip.compress(manifest, 9, mtime=0)))
     f.write(arr("icon_png", png))
+    f.write(arr("pcshot_sh", open(os.path.join(root, "firmware", "padkey", "pcshot.sh"), "rb").read()))
 print("assets:", len(html), "->", len(gzip.compress(html, 9)), "bytes html; icon", len(png))
 
 # Static copy for GitHub Pages (Bluetooth mode needs https).
