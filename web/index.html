@@ -1503,10 +1503,26 @@ setZy.init = true; setZy(zyMode, true);
 
 function setKbd(on) {
   document.body.classList.toggle('nokbd', !on);
-  $('bKbd').classList.toggle('on', on);
   localStorage.padkeyKbd = on ? '1' : '0';
+  updateModeButtons();
 }
-$('bKbd').onclick = () => setKbd(document.body.classList.contains('nokbd'));
+// The menu works like tabs: exactly one of 鍵盤 / 整串輸入 / 描圖 is lit.
+function updateModeButtons() {
+  const composing = document.body.classList.contains('composing');
+  const tracing = $('trace') && $('trace').classList.contains('show');
+  $('bZh').classList.toggle('on', composing && !tracing);
+  $('bTrace').classList.toggle('on', !!tracing);
+  $('bKbd').classList.toggle('on', !composing && !tracing);
+}
+$('bKbd').onclick = () => {
+  const composing = document.body.classList.contains('composing');
+  const tracing = $('trace').classList.contains('show');
+  if (composing || tracing) {            // back to keyboard mode
+    if (tracing) { setCrop(false); $('trace').classList.remove('show'); }
+    if (composing) closeCompose();
+    setKbd(true);
+  } else setKbd(document.body.classList.contains('nokbd'));   // already in keyboard mode: show/hide the keys
+};
 setKbd(localStorage.padkeyKbd !== '0');
 
 // ------------------------------------------------------------ iPad system keyboard
@@ -1656,13 +1672,13 @@ if (mode === 'ble') $('wifiSec').style.display = 'none';
 // ------------------------------------------------------------ 中文送字 (iPad keyboard -> host clipboard paste)
 const compose = $('compose'), ctext = $('ctext');
 function openCompose() {
-  compose.classList.add('show'); document.body.classList.add('composing'); setTimeout(syncBar, 50);
+  compose.classList.add('show'); document.body.classList.add('composing'); setTimeout(syncBar, 50); updateModeButtons();
   if (info.bridge === false) toast('三星平板的 PadKey 橋接程式沒有在執行，中文送不過去', 4000);
   ctext.focus();
 }
 function closeCompose_() {}
-function closeCompose() { compose.classList.remove('show'); document.body.classList.remove('composing'); ctext.blur(); }
-$('bZh').onclick = () => (compose.classList.contains('show') ? closeCompose() : openCompose());
+function closeCompose() { compose.classList.remove('show'); document.body.classList.remove('composing'); ctext.blur(); updateModeButtons(); }
+$('bZh').onclick = () => { if ($('trace').classList.contains('show')) { setCrop(false); $('trace').classList.remove('show'); } if (!compose.classList.contains('show')) openCompose(); else updateModeButtons(); };
 $('cClose').onclick = closeCompose;
 async function sendUText(str) {
   const b = enc.encode(str), N = 160;
@@ -1877,11 +1893,11 @@ function tEnd(e) {
 $('tArea').addEventListener('pointerup', tEnd); $('tArea').addEventListener('pointercancel', tEnd);
 
 $('bTrace').onclick = () => {
-  trace.classList.add('show');
+  trace.classList.add('show'); updateModeButtons();
   if (pendingRef) setRef(pendingRef); else if (!ref.src && history[0]) setRef(history[0]);
   requestAnimationFrame(() => { if (ref.naturalWidth) { fitStage(); redraw(); } });
 };
-$('tClose').onclick = () => { setCrop(false); trace.classList.remove('show'); };
+$('tClose').onclick = () => { setCrop(false); trace.classList.remove('show'); updateModeButtons(); };
 $('tOpacity').oninput = () => { ref.style.opacity = $('tOpacity').value; };
 $('tSize').oninput = () => { pen.size = +$('tSize').value; };
 $('tUndo').onclick = () => { strokes.pop(); redraw(); };
