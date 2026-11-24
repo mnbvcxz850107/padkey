@@ -200,7 +200,12 @@ body.phone #touchbar { display: none; }
 #kbd.std .k.locked { background: rgba(0,240,255,.25); }
 #kbd.std .k.capson { box-shadow: 0 0 0 2px var(--yellow) inset, 0 3px 0 #121214; color: var(--yellow); }
 #kbd.std .w125 { flex: 1.25; } #kbd.std .w15 { flex: 1.5; } #kbd.std .w175 { flex: 1.75; } #kbd.std .w2 { flex: 2; }
-#kbd.std .w225 { flex: 2.25; } #kbd.std .w625 { flex: 6.25; }
+#kbd.std .w225 { flex: 2.25; } #kbd.std .w625 { flex: 6.25; } #kbd.std .w275 { flex: 2.75; } #kbd.std .w5 { flex: 5; }
+#kbd.std .frow .k { height: 40px; font-size: 17px; background: #2a2a2e; }
+#kbd.std .updown { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+#kbd.std .k.half { height: 25px; flex: 1; font-size: 13px; }
+body.phone #kbd.std .frow .k { height: 28px; font-size: 13px; }
+body.phone #kbd.std .k.half { height: 17px; }
 body.phone #kbd.std .k { height: 38px; font-size: 14px; }
 body.phone #kbd.std .k .sh { font-size: 9px; }
 body.phone .srow { gap: 3px; margin-bottom: 4px; }
@@ -1138,6 +1143,7 @@ function makeKey(def) {
     // (No contact-size check: iPad reports large sizes for ordinary fingers.)
     el.classList.add('down');
     if (isGlobe) { el._longT = setTimeout(() => { el._dead = true; setZy(!zyMode); toast('只切換 App 上的注音標示（不送快捷鍵）'); }, 650); return; }
+    if ((def[4] && !cls.includes('arr')) || cls.includes('fnkey')) return;   // special keys act on release (arrows still repeat)
     if (!cfg.palm) {  // classic: act on press
       if (isMod) { toggleMod(u); return; }
       el._mods = [...latched.keys()];
@@ -1148,7 +1154,7 @@ function makeKey(def) {
     }
     if (REPEAT.has(u)) {
       el._repT = setTimeout(() => {
-        if (el._dead || kbdTouches !== 1) return;
+        if (el._dead || kbdTouches !== 1 || (def[4] && fnOn())) return;
         el._mods = [...latched.keys()];
         el._mods.forEach((m) => send(new Uint8Array([M.KEYDOWN, m])));
         send(new Uint8Array([M.KEYDOWN, u])); el._held = true;
@@ -1174,6 +1180,12 @@ function makeKey(def) {
     if (!wasDown || el._dead || e.type === 'pointercancel') return;
     if (cfg.palm && performance.now() - el._t0 > TAP_MAX_MS) return;   // rested, not tapped
     if (isGlobe) { switchIme(); return; }
+    if (cls.includes('fnkey')) {
+      const now = performance.now();
+      setFn(!fnState ? 'latched' : fnState === 'latched' && now - fnTapAt < 350 ? 'locked' : '');
+      fnTapAt = now; return;
+    }
+    if (def[4] && (fnOn() || !(cls.includes('arr')))) { keyExtra(def); clearLatched(); return; }
     if (isMod) { if (cfg.palm) toggleMod(u); return; }
     fireKey(u, lab, [...latched.keys()]);
     clearLatched();
@@ -1373,29 +1385,66 @@ function refreshNative() {
   }
 }
 
-// ------------------------------------------------------------ standard 65% keyboard (English only)
+// ------------------------------------------------------------ keyboard laid out like the user's tablet keyboard case
+// def = [label, shifted, usage, classes, extra]; extra: {cons, ime, fnL, fnU} -> handled on release by keyExtra()
 const L = (c) => [c.toUpperCase(), 0, 0x04 + c.charCodeAt(0) - 97];
+const FNROW = [
+  ['□', { cons: 0x223, lbl: 'HOME' }], ['🔅', { cons: 0x70, lbl: 'DIM' }], ['🔆', { cons: 0x6F, lbl: 'BRIGHT' }], ['📸', { u: 0x46, lbl: 'SNAP' }],
+  ['🌐', { ime: true, lbl: 'LANG' }], ['🔍', { cons: 0x221, lbl: 'SEARCH' }], ['⏮', { cons: 0xB6, lbl: 'PREV' }], ['⏯', { cons: 0xCD, lbl: 'PLAY' }],
+  ['⏭', { cons: 0xB5, lbl: 'NEXT' }], ['🔇', { cons: 0xE2, lbl: 'MUTE' }], ['🔉', { cons: 0xEA, lbl: 'VOL-' }], ['🔊', { cons: 0xE9, lbl: 'VOL+' }],
+  ['🔒', { cons: 0x32, lbl: 'LOCK' }],
+].map(([l, x], i) => [l, 0, x.u || 0, 'fnk', Object.assign(x, i < 12 ? { fnL: 'F' + (i + 1), fnU: 0x3A + i } : { fnL: 'Ins', fnU: 0x49 })]);
 const STD = [
+  [...FNROW, ['Del', 0, 0x4C, 'mod fnk']],
   [['`', '~', 0x35], ['1', '!', 0x1E], ['2', '@', 0x1F], ['3', '#', 0x20], ['4', '$', 0x21], ['5', '%', 0x22], ['6', '^', 0x23], ['7', '&', 0x24],
-    ['8', '*', 0x25], ['9', '(', 0x26], ['0', ')', 0x27], ['-', '_', 0x2D], ['=', '+', 0x2E], ['⌫', 0, 0x2A, 'mod w2'], ['Del', 0, 0x4C, 'mod']],
-  [['Tab', 0, 0x2B, 'mod w15'], ...'qwertyuiop'.split('').map(L), ['[', '{', 0x2F], [']', '}', 0x30], ['\\', '|', 0x31, 'w15'], ['PgUp', 0, 0x4B, 'mod']],
-  [['Caps', 0, 0x39, 'mod w175'], ...'asdfghjkl'.split('').map(L), [';', ':', 0x33], ["'", '"', 0x34], ['Enter', 0, 0x28, 'mod w225'], ['PgDn', 0, 0x4E, 'mod']],
-  [['Shift', 0, 0xE1, 'mod w225 m'], ...'zxcvbnm'.split('').map(L), [',', '<', 0x36], ['.', '>', 0x37], ['/', '?', 0x38], ['Shift', 0, 0xE5, 'mod w175 m'], ['↑', 0, 0x52, 'mod'], ['End', 0, 0x4D, 'mod']],
-  [['Ctrl', 0, 0xE0, 'mod w125 m'], ['Win', 0, 0xE3, 'mod w125 m'], ['Alt', 0, 0xE2, 'mod w125 m'], ['', 0, 0x2C, 'w625'], ['Alt', 0, 0xE6, 'mod m'], ['Ctrl', 0, 0xE4, 'mod m'],
-    ['←', 0, 0x50, 'mod'], ['↓', 0, 0x51, 'mod'], ['→', 0, 0x4F, 'mod']],
+    ['8', '*', 0x25], ['9', '(', 0x26], ['0', ')', 0x27], ['-', '_', 0x2D], ['=', '+', 0x2E], ['Backspace', 0, 0x2A, 'mod w175']],
+  [['Tab', 0, 0x2B, 'mod w15'], ...'qwertyuiop'.split('').map(L), ['[', '{', 0x2F], [']', '}', 0x30], ['\\', '|', 0x31, 'w125']],
+  [['Caps Lock', 0, 0x39, 'mod w175'], ...'asdfghjkl'.split('').map(L), [';', ':', 0x33], ["'", '"', 0x34], ['Enter', 0, 0x28, 'mod w2']],
+  [['Shift', 0, 0xE1, 'mod w225 m'], ...'zxcvbnm'.split('').map(L), [',', '<', 0x36], ['.', '>', 0x37], ['/', '?', 0x38], ['Shift', 0, 0xE5, 'mod w275 m']],
+  [['Ctrl', 0, 0xE0, 'mod m'], ['Fn', 0, 0, 'mod fnkey'], ['⊞', 0, 0xE3, 'mod m'], ['Alt', 0, 0xE2, 'mod m'], ['', 0, 0x2C, 'w5'], ['Alt', 0, 0xE6, 'mod m'], ['Ctrl', 0, 0xE4, 'mod m'],
+    ['←', 0, 0x50, 'mod arr', { fnL: 'Home', fnU: 0x4A }], 'UPDOWN', ['→', 0, 0x4F, 'mod arr', { fnL: 'End', fnU: 0x4D }]],
 ];
+let fnState = '';                 // '' | 'latched' | 'locked'
+function fnOn() { return !!fnState; }
+// Special keys (media row, 🌐, Fn layer). Called on release instead of a plain key tap.
+function keyExtra(def) {
+  const x = def[4] || {};
+  let mods = 0; for (const m of latched.keys()) mods |= modBit(m);
+  if (fnOn() && x.fnU) { send(new Uint8Array([M.TAP, mods, x.fnU])); keyLabel(x.fnL, []); }
+  else if (x.cons) { send(new Uint8Array([M.CONSUMER, x.cons & 255, x.cons >> 8])); label(x.lbl || 'KEY', C565.cyan); }
+  else if (x.ime) { sendImeToggle(); label('LANG', C565.yellow); }
+  else if (def[2]) { send(new Uint8Array([M.TAP, mods, def[2]])); keyLabel(x.lbl || def[0], []); }
+  if (fnState === 'latched') setFn('');
+}
+function setFn(st) {
+  fnState = st;
+  for (const { el, def } of keyEls) {
+    if (!el._std) continue;
+    const x = def[4];
+    if (def[3] && def[3].includes('fnkey')) { el.classList.toggle('latched', !!st); el.classList.toggle('locked', st === 'locked'); }
+    if (x && x.fnL) el.textContent = st ? x.fnL : def[0];
+  }
+}
+let fnTapAt = 0;
 function buildStdKbd() {
   const kb = $('kbd'); kb.innerHTML = ''; kb.className = 'std';
-  for (const row of STD) {
-    const r = document.createElement('div'); r.className = 'srow';
+  STD.forEach((row, ri) => {
+    const r = document.createElement('div'); r.className = 'srow' + (ri === 0 ? ' frow' : '');
     for (const def of row) {
+      if (def === 'UPDOWN') {          // ↑ over ↓, half-height keys like the real keyboard
+        const col = document.createElement('div'); col.className = 'updown';
+        for (const d of [['↑', 0, 0x52, 'mod arr half', { fnL: 'PgUp', fnU: 0x4B }], ['↓', 0, 0x51, 'mod arr half', { fnL: 'PgDn', fnU: 0x4E }]]) {
+          const el = makeKey(d); el._std = true; col.appendChild(el);
+        }
+        r.appendChild(col); continue;
+      }
       const el = makeKey(def);
       el._std = true;
       if (def[1]) el.innerHTML = `<span class="sh"></span><span class="pl"></span>`, el.querySelector('.sh').textContent = def[1], el.querySelector('.pl').textContent = def[0];
       r.appendChild(el);
     }
     kb.appendChild(r);
-  }
+  });
 }
 
 function buildKbd() {
