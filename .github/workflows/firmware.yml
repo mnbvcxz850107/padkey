@@ -1,0 +1,41 @@
+name: Build PadKey firmware
+on:
+  push:
+    paths: ["firmware/**", "web/**", "tools/gen_assets.py", ".github/workflows/firmware.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.arduino15/packages
+            ~/Arduino/libraries
+          key: esp32-4.0.0-libs-v1
+      - name: ESP32 core and libraries (same versions as the local build)
+        run: |
+          arduino-cli config init --overwrite
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@4.0.0
+          arduino-cli lib install "Adafruit GFX Library@1.13.0" "Adafruit ST7735 and ST7789 Library@1.12.0" \
+            "Adafruit BusIO@1.17.4" "Async TCP@3.6.1" "ESP Async WebServer@3.12.1"
+      - name: Web page and assets
+        run: pip install pillow && python3 tools/gen_assets.py
+      - name: Compile
+        run: |
+          arduino-cli compile -b "esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB" \
+            --output-dir build firmware/padkey
+          cp ~/.arduino15/packages/esp32/hardware/esp32/4.0.0/tools/partitions/boot_app0.bin build/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: padkey-firmware
+          path: |
+            build/padkey.ino.bin
+            build/padkey.ino.bootloader.bin
+            build/padkey.ino.partitions.bin
+            build/boot_app0.bin

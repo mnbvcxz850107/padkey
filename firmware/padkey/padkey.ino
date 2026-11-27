@@ -250,68 +250,77 @@ static void drawFrame() {
   }
   fx = FX_NONE;
 
-  // Animated neon border.
-  uint8_t base = now / 12;
-  for (int i = 0; i < 160; i++) {
-    hsv(base + i, r, g, b);
-    uint16_t c = rgb565(r, g, b);
-    canvas.drawPixel(i, 0, c); canvas.drawPixel(159 - i, 79, c);
-  }
-  for (int i = 0; i < 80; i++) {
-    hsv(base + 160 + i, r, g, b);
-    uint16_t c = rgb565(r, g, b);
-    canvas.drawPixel(159, i, c); canvas.drawPixel(0, 79 - i, c);
-  }
+  // ---- Clean HUD layout: static, white / cyan / gray only, no moving colours.
+  const uint16_t ACC = rgb565(0, 210, 255), ACC_DIM = rgb565(0, 70, 92);
+  const uint16_t TXT = 0xFFFF, DIM = rgb565(110, 122, 145), OFF = rgb565(58, 64, 80);
+  const uint16_t OK = rgb565(40, 225, 120), WARN = rgb565(255, 176, 0);
+  auto small = [&](int x, int y, const String &t, uint16_t c) {
+    canvas.setFont(nullptr); canvas.setTextSize(1); canvas.setTextColor(c); canvas.setCursor(x, y); canvas.print(t);
+  };
+  auto rightSmall = [&](int y, const String &t, uint16_t c) { small(155 - (int)t.length() * 6, y, t, c); };
+  auto dot = [&](int x, const char *lbl, bool on) {
+    canvas.fillCircle(x + 2, 7, 2, on ? OK : OFF);
+    small(x + 7, 4, lbl, on ? TXT : DIM);
+  };
+  // corner brackets
+  const int L = 6;
+  canvas.drawFastHLine(0, 0, L, ACC_DIM);   canvas.drawFastVLine(0, 0, L, ACC_DIM);
+  canvas.drawFastHLine(160 - L, 0, L, ACC_DIM); canvas.drawFastVLine(159, 0, L, ACC_DIM);
+  canvas.drawFastHLine(0, 79, L, ACC_DIM);  canvas.drawFastVLine(0, 80 - L, L, ACC_DIM);
+  canvas.drawFastHLine(160 - L, 79, L, ACC_DIM); canvas.drawFastVLine(159, 80 - L, L, ACC_DIM);
+  // header: name + link status
+  bool wifiOn = apMode || WiFi.status() == WL_CONNECTED;
+  small(6, 4, "PADKEY", ACC);
+  dot(70, "USB", usbUp);
+  dot(98, "BLE", bleCount > 0);
+  dot(126, "WIFI", wifiOn);
+  canvas.drawFastHLine(6, 15, 148, ACC_DIM);
+  canvas.drawFastHLine(6, 15, 22, ACC);
+  // footer
+  canvas.drawFastHLine(6, 66, 148, ACC_DIM);
+  rightSmall(70, "v" FW_VERSION, DIM);
 
   if (pairPin[0] && now < pinShowUntil) {
-    centerText("PAIRING PIN", 20, &FreeSansBold9pt7b, 0xF81F);
-    centerText(String(pairPin), 58, &FreeSansBold18pt7b, 0x07FF);
+    centerText("PAIRING PIN", 22, nullptr, DIM);
+    centerText(String(pairPin), 58, &FreeSansBold18pt7b, TXT);
+    small(6, 70, "ENTER ON IPAD", ACC);
     return;
   }
   if (bigMsg[0] && now < bigMsgUntil) {
-    centerText(String(bigMsg), 48, &FreeSansBold9pt7b, 0xFFE0);
+    centerText(String(bigMsg), 46, &FreeSansBold9pt7b, TXT);
+    small(6, 70, clientCount ? "LINKED" : "STANDBY", ACC);
     return;
   }
 
   bool showInfo = (infoPage && now < infoUntil) || clientCount == 0;
   if (showInfo) {
-    canvas.setFont(nullptr); canvas.setTextSize(1);
-    canvas.setTextColor(0xF81F); canvas.setCursor(6, 6); canvas.print("PadKey " FW_VERSION);
-    canvas.setTextColor(usbUp ? 0x07E0 : 0xFBE0);
-    canvas.setCursor(100, 6); canvas.print(usbUp ? "USB OK" : "USB --");
-    canvas.setTextColor(0xFFFF);
+    auto row = [&](int y, const char *k, const String &v, uint16_t c) { small(6, y, k, DIM); small(42, y, v, c); };
     if (apMode) {
-      canvas.setCursor(6, 22); canvas.print("WiFi: "); canvas.print(apSsid);
-      canvas.setCursor(6, 36); canvas.print("Pass: "); canvas.setTextColor(0xFFE0); canvas.print(apPass);
-      canvas.setTextColor(0x07FF);
-      canvas.setCursor(6, 52); canvas.print("http://"); canvas.print(ipString());
+      row(22, "WIFI", apSsid.substring(0, 18), TXT);
+      row(36, "PASS", apPass.substring(0, 18), WARN);
+      row(50, "URL", ipString(), ACC);
     } else if (WiFi.status() == WL_CONNECTED) {
-      canvas.setCursor(6, 22); canvas.print("WiFi: "); canvas.print(wifiSsid.substring(0, 18));
-      canvas.setTextColor(0x07FF);
-      canvas.setCursor(6, 38); canvas.print("http://"); canvas.print(ipString());
-      canvas.setCursor(6, 52); canvas.print("http://padkey.local");
+      row(22, "WIFI", wifiSsid.substring(0, 18), TXT);
+      row(36, "URL", ipString(), ACC);
+      row(50, "HOST", "padkey.local", ACC);
     } else {
-      canvas.setCursor(6, 30); canvas.print("Connecting WiFi...");
+      row(22, "WIFI", "connecting...", DIM);
+      row(36, "BLE", apSsid.substring(0, 18), TXT);
     }
-    canvas.setTextColor(0x7BEF);
-    canvas.setCursor(6, 68); canvas.print(clientCount ? "iPad connected" : "Waiting for iPad");
+    small(6, 70, clientCount ? "LINKED" : "WAITING FOR IPAD", clientCount ? ACC : DIM);
     return;
   }
 
-  // Connected: show the last action big, fading out.
+  // Connected: last action big (white, fading), otherwise READY.
+  small(6, 70, "LINKED", ACC);
   uint32_t age = now - lastLabelAt;
   if (lastLabel.length() && age < 2500) {
-    uint8_t fade = age < 1500 ? 255 : 255 - (age - 1500) * 255 / 1000;
-    uint8_t cr = ((labelColor >> 11) & 31) * 8 * fade / 255;
-    uint8_t cg = ((labelColor >> 5) & 63) * 4 * fade / 255;
-    uint8_t cb = (labelColor & 31) * 8 * fade / 255;
+    uint8_t v = age < 1500 ? 255 : 255 - (age - 1500) * 255 / 1000;
     const GFXfont *f = lastLabel.length() <= 6 ? &FreeSansBold18pt7b : &FreeSansBold9pt7b;
-    centerText(lastLabel, lastLabel.length() <= 6 ? 54 : 46, f, rgb565(cr, cg, cb));
+    centerText(lastLabel, lastLabel.length() <= 6 ? 54 : 46, f, rgb565(v, v, v));
   } else {
-    centerText("PADKEY", 40, &FreeSansBold18pt7b, rgb565(0, 200 + 55 * sin(now / 400.0), 255));
-    canvas.setFont(nullptr); canvas.setTextSize(1);
-    canvas.setTextColor(usbUp ? 0x07E0 : 0xFBE0);
-    canvas.setCursor(42, 62); canvas.print(usbUp ? "USB READY" : "NO USB HOST");
+    centerText("READY", usbUp ? 54 : 48, &FreeSansBold18pt7b, TXT);
+    if (!usbUp) centerText("NO USB HOST", 54, nullptr, WARN);
   }
 }
 
