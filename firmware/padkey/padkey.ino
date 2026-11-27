@@ -205,6 +205,53 @@ static String ipString() {
   return apMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString();
 }
 
+// Pixel cat shown while idle (instead of "READY"). 16x13 sprite, drawn 3x.
+// W white, P cheek pink, N nose, C collar (cyan), E eyes, K mouth.
+static const char *const CAT[] = {
+  "..W..........W..",
+  ".WWW........WWW.",
+  ".WPWW......WWPW.",
+  ".WWWWWWWWWWWWWW.",
+  "WWWWWWWWWWWWWWWW",
+  "WWWEEWWWWWWEEWWW",
+  "WWWEEWWWWWWEEWWW",
+  "WPPWWWWNNWWWWPPW",
+  "WWWWWWKWWKWWWWWW",
+  ".WWWWWWWWWWWWWW.",
+  "..CCCCCCCCCCCC..",
+  "..WWWWWWWWWWWW..",
+  "..WWW.WWWW.WWW..",
+};
+static void drawCat(uint32_t now, bool awake) {
+  const int S = 3, W = 16, H = 13;
+  const int ox = (160 - (W + 2) * S) / 2;            // a little room for the tail
+  const int oy = 19 + (awake ? (int)((now / 450) & 1) : 0);   // gentle bob
+  const bool blink = awake && (now % 3600) < 160;
+  const uint16_t WHITE = 0xFFFF, CHEEK = rgb565(255, 150, 200), NOSE = rgb565(255, 90, 150);
+  const uint16_t COLLAR = rgb565(0, 210, 255), INK = rgb565(20, 24, 40);
+  auto px = [&](int x, int y, uint16_t c) { canvas.fillRect(ox + x * S, oy + y * S, S, S, c); };
+  for (int y = 0; y < H; y++) {
+    for (int x = 0; x < W; x++) {
+      char c = CAT[y][x];
+      if (c == '.') continue;
+      uint16_t col = c == 'W' ? WHITE : c == 'P' ? CHEEK : c == 'N' ? NOSE : c == 'C' ? COLLAR : INK;
+      if (c == 'E' && (!awake || blink)) col = y == 6 ? INK : WHITE;   // closed eyes: a thin line
+      px(x, y, col);
+    }
+  }
+  // tail, attached at the back; swishes while awake
+  if (awake && ((now / 300) & 1)) { px(14, 11, WHITE); px(15, 10, WHITE); px(16, 9, WHITE); px(16, 8, WHITE); }
+  else                            { px(14, 11, WHITE); px(15, 11, WHITE); px(16, 10, WHITE); px(16, 9, WHITE); }
+  if (!awake) {                                      // asleep: little z's drifting up
+    canvas.setFont(nullptr); canvas.setTextSize(1); canvas.setTextColor(COLLAR);
+    for (int k = 0; k < 3; k++) {
+      int t = (int)((now / 600 + k) % 3);
+      canvas.setCursor(ox + (W + 1) * S + k * 5, oy + 6 - t * 6);
+      canvas.print('z');
+    }
+  }
+}
+
 static void drawFrame() {
   uint32_t now = millis();
   canvas.fillScreen(0);
@@ -319,8 +366,8 @@ static void drawFrame() {
     const GFXfont *f = lastLabel.length() <= 6 ? &FreeSansBold18pt7b : &FreeSansBold9pt7b;
     centerText(lastLabel, lastLabel.length() <= 6 ? 54 : 46, f, rgb565(v, v, v));
   } else {
-    centerText("READY", usbUp ? 54 : 48, &FreeSansBold18pt7b, TXT);
-    if (!usbUp) centerText("NO USB HOST", 54, nullptr, WARN);
+    drawCat(now, usbUp);                             // sleeps when no computer/tablet is on the USB side
+    if (!usbUp) { canvas.fillRect(6, 68, 80, 10, 0); small(6, 70, "NO USB HOST", WARN); }
   }
 }
 
