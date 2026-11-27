@@ -47,12 +47,14 @@ static volatile bool statusDirty = false;
 static bool ledEnabled = false;   // RGB LED off by default (user preference, stored in NVS)
 static KeyReport report = {};
 
+static uint32_t keyCount = 0;   // keys sent to the computer since boot (shown on the screen)
 static void keyDown(uint8_t k) {
   if (k >= 0xE0 && k <= 0xE7) {
     report.modifiers |= 1 << (k - 0xE0);
   } else {
     for (int i = 0; i < 6; i++) if (report.keys[i] == k) return;
     for (int i = 0; i < 6; i++) if (!report.keys[i]) { report.keys[i] = k; break; }
+    keyCount++;
   }
   Keyboard.sendReport(&report);
 }
@@ -222,11 +224,10 @@ static const char *const CAT[] = {
   "..WWWWWWWWWWWW..",
   "..WWW.WWWW.WWW..",
 };
-static void drawCat(uint32_t now, bool awake) {
+static void drawCat(uint32_t now, bool awake, bool happy, int ox) {
   const int S = 3, W = 16, H = 13;
-  const int ox = (160 - (W + 2) * S) / 2;            // a little room for the tail
   const int oy = 19 + (awake ? (int)((now / 450) & 1) : 0);   // gentle bob
-  const bool blink = awake && (now % 3600) < 160;
+  const bool blink = awake && !happy && (now % 3600) < 160;
   const uint16_t WHITE = 0xFFFF, CHEEK = rgb565(255, 150, 200), NOSE = rgb565(255, 90, 150);
   const uint16_t COLLAR = rgb565(0, 210, 255), INK = rgb565(20, 24, 40);
   auto px = [&](int x, int y, uint16_t c) { canvas.fillRect(ox + x * S, oy + y * S, S, S, c); };
@@ -236,6 +237,7 @@ static void drawCat(uint32_t now, bool awake) {
       if (c == '.') continue;
       uint16_t col = c == 'W' ? WHITE : c == 'P' ? CHEEK : c == 'N' ? NOSE : c == 'C' ? COLLAR : INK;
       if (c == 'E' && (!awake || blink)) col = y == 6 ? INK : WHITE;   // closed eyes: a thin line
+      if (c == 'E' && happy) col = y == 5 ? INK : WHITE;               // happy squint
       px(x, y, col);
     }
   }
@@ -358,17 +360,27 @@ static void drawFrame() {
     return;
   }
 
-  // Connected: last action big (white, fading), otherwise READY.
-  small(6, 70, "LINKED", ACC);
+  // Connected: cat on the left, status on the right.
+  small(6, 70, usbUp ? "LINKED" : "NO USB HOST", usbUp ? ACC : WARN);
   uint32_t age = now - lastLabelAt;
-  if (lastLabel.length() && age < 2500) {
-    uint8_t v = age < 1500 ? 255 : 255 - (age - 1500) * 255 / 1000;
-    const GFXfont *f = lastLabel.length() <= 6 ? &FreeSansBold18pt7b : &FreeSansBold9pt7b;
-    centerText(lastLabel, lastLabel.length() <= 6 ? 54 : 46, f, rgb565(v, v, v));
-  } else {
-    drawCat(now, usbUp);                             // sleeps when no computer/tablet is on the USB side
-    if (!usbUp) { canvas.fillRect(6, 68, 80, 10, 0); small(6, 70, "NO USB HOST", WARN); }
-  }
+  bool acting = lastLabel.length() && age < 2500;
+  drawCat(now, usbUp, acting, 4);
+  const int rx = 66;                                 // right column
+  String head = acting ? lastLabel : String(usbUp ? "READY" : "SLEEP");
+  uint8_t v = acting && age > 1500 ? 255 - (age - 1500) * 255 / 1000 : 255;
+  uint16_t hc = acting ? rgb565(v, v, v) : (usbUp ? TXT : DIM);
+  canvas.setFont(&FreeSansBold9pt7b); canvas.setTextSize(1);
+  int16_t x1, y1; uint16_t w, h;
+  canvas.getTextBounds(head, 0, 0, &x1, &y1, &w, &h);
+  if (w <= 154 - rx) { canvas.setTextColor(hc); canvas.setCursor(rx - x1, 34); canvas.print(head); }
+  else { small(rx, 24, head.substring(0, 14), hc); }  // long names: small font
+  char buf[24];
+  snprintf(buf, sizeof(buf), "%lu", (unsigned long)keyCount);
+  small(rx, 42, "KEYS", DIM); small(rx + 30, 42, buf, TXT);
+  uint32_t up = now / 1000;
+  if (up < 3600) snprintf(buf, sizeof(buf), "%lu:%02lu", (unsigned long)(up / 60), (unsigned long)(up % 60));
+  else snprintf(buf, sizeof(buf), "%luh%02lum", (unsigned long)(up / 3600), (unsigned long)(up / 60 % 60));
+  small(rx, 54, "UP", DIM); small(rx + 30, 54, buf, TXT);
 }
 
 static void updateLed() {
@@ -460,7 +472,7 @@ static void handleMsg(const Msg &m, int &accX, int &accY) {
       for (int i = 1; i < m.len; i++) {
         uint8_t c = d[i];
         if (capsOn && isalpha(c)) c ^= 0x20;  // Caps Lock on the host flips letters; flip back
-        if (c == '\n' || (c >= 32 && c < 127) || c == '\t') { Keyboard.write(c); }
+        if (c == '\n' || (c >= 32 && c < 127) || c == '\t') { Keyboard.write(c); keyCount++; }
       }
       Keyboard.sendReport(&report);  // restore held keys
       break;
